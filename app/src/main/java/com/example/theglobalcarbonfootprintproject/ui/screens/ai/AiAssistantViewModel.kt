@@ -2,6 +2,8 @@ package com.example.theglobalcarbonfootprintproject.ui.screens.ai
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.theglobalcarbonfootprintproject.BuildConfig
+import com.google.ai.client.generativeai.GenerativeModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +25,11 @@ class AiAssistantViewModel @Inject constructor() : ViewModel() {
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState = _uiState.asStateFlow()
 
+    private val generativeModel = GenerativeModel(
+        modelName = "gemini-1.5-flash",
+        apiKey = BuildConfig.GEMINI_API_KEY
+    )
+
     fun sendMessage(text: String) {
         if (text.isBlank()) return
 
@@ -31,21 +38,18 @@ class AiAssistantViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(messages = currentMessages, isLoading = true)
 
         viewModelScope.launch {
-            // Mock Gemini Response for now
-            kotlinx.coroutines.delay(1500)
-            val response = getMockResponse(text)
-            val updatedMessages = _uiState.value.messages.toMutableList()
-            updatedMessages.add(ChatMessage(response, false))
-            _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
-        }
-    }
-
-    private fun getMockResponse(input: String): String {
-        return when {
-            input.contains("meat", ignoreCase = true) -> "Reducing meat consumption can lower your footprint by up to 2 tons per year. Try a 'Meatless Monday'!"
-            input.contains("car", ignoreCase = true) -> "Switching to public transport or a bike can significantly reduce transport emissions."
-            input.contains("energy", ignoreCase = true) -> "LED bulbs and better insulation are great first steps for home energy efficiency."
-            else -> "That's a great question! Small changes in our daily habits, like choosing local produce, make a big difference for the planet."
+            try {
+                val response = generativeModel.generateContent(text)
+                val aiResponse = response.text ?: "I'm sorry, I couldn't process that. Please try again."
+                
+                val updatedMessages = _uiState.value.messages.toMutableList()
+                updatedMessages.add(ChatMessage(aiResponse, false))
+                _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
+            } catch (e: Exception) {
+                val updatedMessages = _uiState.value.messages.toMutableList()
+                updatedMessages.add(ChatMessage("Error: ${e.message}", false))
+                _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
+            }
         }
     }
 }
