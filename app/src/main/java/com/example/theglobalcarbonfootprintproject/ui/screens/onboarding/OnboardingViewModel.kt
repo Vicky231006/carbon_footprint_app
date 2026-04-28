@@ -48,7 +48,7 @@ class OnboardingViewModel @Inject constructor(
         _currentStep.update { (it - 1).coerceAtLeast(0) }
     }
 
-    fun saveToPreferences(prefs: SharedPreferences) {
+    fun saveToPreferences(prefs: SharedPreferences, onComplete: () -> Unit) {
         val currentData = _data.value
         val gson = Gson()
         
@@ -147,6 +147,8 @@ class OnboardingViewModel @Inject constructor(
                 .putFloat("grid_factor", currentData.gridFactor.toFloat())
                 .putLong("onboarding_timestamp", System.currentTimeMillis())
                 .apply()
+                
+            onComplete()
         }
     }
 }

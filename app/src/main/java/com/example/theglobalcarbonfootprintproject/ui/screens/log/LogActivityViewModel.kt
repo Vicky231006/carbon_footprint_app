@@ -42,12 +42,16 @@ class LogActivityViewModel @Inject constructor(
                 EnergyType.NATURAL_GAS -> 2.0  // kg per unit
                 EnergyType.LPG -> 2.98         // kg per kg
                 EnergyType.COAL -> 2.42        // kg per kg
+                EnergyType.GRID -> 0.82
+                EnergyType.SOLAR -> 0.05
+                EnergyType.DIESEL -> 2.68
             }
             repository.saveEnergyLog(
                 EnergyLog(
                     date = System.currentTimeMillis(),
                     energyType = energyType,
                     value = value,
+                    kwh = if (energyType == EnergyType.ELECTRICITY) value else 0.0,
                     co2Kg = value * factor
                 )
             )

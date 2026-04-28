@@ -28,6 +28,8 @@ android {
         buildConfigField("String", "MONGODB_CLIENT_ID", "\"${props.getProperty("MONGODB_CLIENT_ID") ?: ""}\"")
         buildConfigField("String", "MONGODB_CLIENT_SECRET", "\"${props.getProperty("MONGODB_CLIENT_SECRET") ?: ""}\"")
         buildConfigField("String", "MONGODB_URI", "\"${props.getProperty("MONGODB_URI") ?: ""}\"")
+        buildConfigField("String", "ATLAS_DATA_API_KEY", "\"${props.getProperty("ATLAS_DATA_API_KEY") ?: ""}\"")
+        buildConfigField("String", "ATLAS_APP_ID", "\"${props.getProperty("ATLAS_APP_ID") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -117,12 +119,6 @@ dependencies {
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
-
-    // MongoDB
-    implementation(libs.mongodb.driver) {
-        exclude(group = "org.mongodb", module = "bson-record-codec")
-    }
-    implementation(libs.mongodb.bson)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

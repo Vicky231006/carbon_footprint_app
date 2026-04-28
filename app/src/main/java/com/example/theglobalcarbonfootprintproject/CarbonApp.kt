@@ -30,6 +30,7 @@ class CarbonApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        
         // WorkManager initialization is now handled by the Configuration.Provider
         createNotificationChannel()
         initRealm()
@@ -49,7 +50,7 @@ class CarbonApp : Application(), Configuration.Provider {
     }
 
     private fun initRealm() {
-        realmApp = App.create("carbon-app-xxxxx") // Replace with your actual App ID
+        // realmApp = App.create("carbon-app-xxxxx") // Replace with your actual App ID
     }
 
     private fun createNotificationChannel() {

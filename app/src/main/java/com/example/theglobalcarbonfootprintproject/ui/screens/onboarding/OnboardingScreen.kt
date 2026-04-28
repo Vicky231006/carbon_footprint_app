@@ -306,8 +306,9 @@ fun OnboardingScreen(
                 FinalizingStep(
                     progress = progress,
                     onComplete = {
-                        viewModel.saveToPreferences(prefs)
-                        onOnboardingComplete()
+                        viewModel.saveToPreferences(prefs) {
+                            onOnboardingComplete()
+                        }
                     }
                 )
             }

@@ -46,4 +46,23 @@ object NetworkModule {
     fun provideUserApiService(retrofit: Retrofit): UserApiService {
         return retrofit.create(UserApiService::class.java)
     }
+
+/*
+    @Provides
+    @Singleton
+    @javax.inject.Named("AtlasRetrofit")
+    fun provideAtlasRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://data.mongodb-api.com/app/${com.example.theglobalcarbonfootprintproject.BuildConfig.ATLAS_APP_ID}/endpoint/data/v1/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(okHttpClient)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAtlasDataApi(@javax.inject.Named("AtlasRetrofit") retrofit: Retrofit): com.example.theglobalcarbonfootprintproject.data.remote.AtlasDataApi {
+        return retrofit.create(com.example.theglobalcarbonfootprintproject.data.remote.AtlasDataApi::class.java)
+    }
+*/
 }

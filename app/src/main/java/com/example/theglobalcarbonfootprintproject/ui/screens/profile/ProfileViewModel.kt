@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -48,6 +49,31 @@ class ProfileViewModel @Inject constructor(
             repository.clearUserProfile()
             launch(Dispatchers.Main) {
                 onComplete()
+            }
+        }
+    }
+
+    fun syncToMongo(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val userType = prefs.getString("user_type", "INDIVIDUAL")
+                var success = false
+                if (userType == "INDIVIDUAL") {
+                    val profile = repository.getUserProfile().firstOrNull()
+                    if (profile != null) {
+                        repository.saveUserProfile(profile)
+                        success = true
+                    }
+                } else {
+                    val profile = repository.getInstitutionProfile().firstOrNull()
+                    if (profile != null) {
+                        repository.saveInstitutionProfile(profile)
+                        success = true
+                    }
+                }
+                withContext(Dispatchers.Main) { onResult(success) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false) }
             }
         }
     }

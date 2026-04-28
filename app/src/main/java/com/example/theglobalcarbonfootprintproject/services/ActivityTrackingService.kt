@@ -35,7 +35,17 @@ class ActivityTrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, buildNotification())
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, buildNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIF_ID, buildNotification())
+            }
+        } catch (e: Exception) {
+            // Catches ForegroundServiceStartNotAllowedException
+            stopSelf()
+            return START_NOT_STICKY
+        }
         registerTransitions()
         registerStepCounter()
         return START_STICKY
