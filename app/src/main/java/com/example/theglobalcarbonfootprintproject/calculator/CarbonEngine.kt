@@ -16,14 +16,11 @@ object CarbonEngine {
 
     fun calculateBreakdown(data: OnboardingData): Map<String, Double> {
         val transport = calculateTransport(data.kmPerDay, data.primaryMode, data.fuelType)
-        val electricity = run {
-            val kWh = if (data.monthlyBillRupees != null)
-                data.monthlyBillRupees / 8.0 / 30.0   // bill → daily kWh
-            else
-                estimateKwhFromAC(data.acUsage)        // fallback estimate
-            val net = (kWh - data.solarKwh / 30.0).coerceAtLeast(0.0)
-            net * data.gridFactor
-        }
+        val electricity = SeasonalElectricityCalculator.getDailyCo2(
+            baseKwh = data.monthlyKwhBase,
+            seasonality = data.acSeasonality,
+            gridFactor = data.gridFactor
+        )
         val food = calculateFood(data.dietType, data.mealsPerDay)
         val digital = calculateDigital(
             screenCategory = data.screenTimeCategory,
@@ -56,6 +53,7 @@ object CarbonEngine {
                 FuelType.ELECTRIC -> 0.053
                 else -> 0.210
             }
+            TransportMode.PUBLIC_TRANSPORT -> 0.065 // Simplified average for generic public transport
             TransportMode.MIXED -> 0.12 // Average weighted
         }
         return km * factor

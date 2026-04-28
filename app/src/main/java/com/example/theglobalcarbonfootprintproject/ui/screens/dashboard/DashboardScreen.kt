@@ -2,6 +2,8 @@ package com.example.theglobalcarbonfootprintproject.ui.screens.dashboard
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,6 +25,7 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     onNavigateToLog: () -> Unit,
+    onNavigateToProfile: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val todayLog by viewModel.todayLog.collectAsState()
@@ -30,9 +33,14 @@ fun DashboardScreen(
     val transportCo2Today by viewModel.transportCo2Today.collectAsState()
     val foodCo2Today by viewModel.foodCo2Today.collectAsState()
     val energyCo2Today by viewModel.energyCo2Today.collectAsState()
+    val digitalCo2Today by viewModel.digitalCo2Today.collectAsState()
     val totalCo2Today by viewModel.totalCo2Today.collectAsState()
     val stepsToday by viewModel.stepsToday.collectAsState()
     val unverifiedSegments by viewModel.unverifiedSegments.collectAsState()
+    val isInstitution by viewModel.isInstitution.collectAsState()
+    val wasteCo2Today by viewModel.wasteCo2Today.collectAsState()
+    val eventCo2Today by viewModel.eventCo2Today.collectAsState()
+    val studentStaffCount by viewModel.studentStaffCount.collectAsState()
     
     val animatedCarbon = remember { Animatable(0f) }
 
@@ -47,6 +55,16 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = { Text("The Carbon Project") },
+                actions = {
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = "Profile",
+                            modifier = Modifier.size(28.dp),
+                            tint = Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF2E7D32),
                     titleContentColor = Color.White
@@ -54,12 +72,14 @@ fun DashboardScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToLog,
-                containerColor = Color(0xFF2E7D32),
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Log Activity")
+            if (!isInstitution) {
+                FloatingActionButton(
+                    onClick = onNavigateToLog,
+                    containerColor = Color(0xFF2E7D32),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Log Activity")
+                }
             }
         }
     ) { paddingValues ->
@@ -68,7 +88,8 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Card(
@@ -111,7 +132,7 @@ fun DashboardScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            val indiaAvg = 4.1 // kg per day approx
+                            val indiaAvg = 9.58 // kg per day benchmark
                             val diff = totalCo2Today - indiaAvg
                             val color = if (diff <= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
                             val text = if (diff <= 0) 
@@ -132,16 +153,25 @@ fun DashboardScreen(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                Text(
-                    text = "Live Breakdown",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Start)
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
+                if (isInstitution) {
+                    InstitutionDashboardContent(
+                        energyKg = energyCo2Today,
+                        transportKg = transportCo2Today,
+                        foodKg = foodCo2Today,
+                        wasteKg = wasteCo2Today,
+                        eventKg = eventCo2Today,
+                        studentStaffCount = studentStaffCount
+                    )
+                } else {
+                    Text(
+                        text = "Live Breakdown",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
 
-                todayLog?.let { log ->
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     if (unverifiedSegments.isNotEmpty()) {
                         DisambiguationCard(unverifiedSegments.first()) { id, mode ->
                             viewModel.verifySegment(id, mode)
@@ -149,19 +179,47 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    DashboardCategoryRow("Transport", log.transportKg + transportCo2Today, Icons.Default.DirectionsCar)
-                    DashboardCategoryRow("Steps", stepsToday.toDouble(), Icons.Default.DirectionsWalk, isSteps = true)
-                    DashboardCategoryRow("Energy", log.electricityKg + energyCo2Today, Icons.Default.Bolt)
-                    DashboardCategoryRow("Food", log.foodKg + foodCo2Today, Icons.Default.Restaurant)
-                    DashboardCategoryRow("Digital", log.digitalKg, Icons.Default.Smartphone)
-                } ?: run {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    DashboardCategoryRow("Transport", transportCo2Today, Icons.Default.DirectionsCar)
+
+                    val kmWalked = stepsToday * 0.000762
+                    val co2SavedGrams = kmWalked * 210
+
+                    DashboardStepRow(stepsToday, kmWalked, co2SavedGrams)
+
+                    DashboardCategoryRow("Energy", energyCo2Today, Icons.Default.Bolt)
+                    DashboardCategoryRow("Food", foodCo2Today, Icons.Default.Restaurant)
+                    DashboardCategoryRow("Digital", digitalCo2Today, Icons.Default.Smartphone)
                 }
+                
+                Spacer(modifier = Modifier.height(80.dp)) // Extra space to prevent FAB overlap
             }
         }
     }
+}
+
+@Composable
+fun DashboardStepRow(steps: Int, km: Double, savedGrams: Double) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.DirectionsWalk, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(28.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("You walked %.1f km today".format(km), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Text("Saved ~%.0f g CO₂ vs driving".format(savedGrams), 
+                 style = MaterialTheme.typography.bodySmall, 
+                 color = Color(0xFF2E7D32))
+        }
+        Text(
+            text = "%,d steps".format(steps),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }
 
 @Composable

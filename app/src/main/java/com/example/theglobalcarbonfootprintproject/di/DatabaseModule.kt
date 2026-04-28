@@ -6,10 +6,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.theglobalcarbonfootprintproject.data.local.CarbonDatabase
-import com.example.theglobalcarbonfootprintproject.data.local.dao.CarbonDao
-import com.example.theglobalcarbonfootprintproject.data.local.dao.EnergyLogDao
-import com.example.theglobalcarbonfootprintproject.data.local.dao.FoodLogDao
-import com.example.theglobalcarbonfootprintproject.data.local.dao.TransportSegmentDao
+import com.example.theglobalcarbonfootprintproject.data.local.dao.*
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -67,6 +64,29 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS `institution_profile` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `city` TEXT NOT NULL, `state` TEXT NOT NULL, `gridFactor` REAL NOT NULL, `studentCount` INTEGER NOT NULL, `staffCount` INTEGER NOT NULL, `buildingFloors` INTEGER NOT NULL, `classroomCount` INTEGER NOT NULL, `classroomAC` TEXT NOT NULL, `labCount` INTEGER NOT NULL, `pcsPerLab` INTEGER NOT NULL, `labHoursPerDay` REAL NOT NULL, `hasServerRoom` INTEGER NOT NULL, `serverRoomSize` TEXT, `monthlyEnergyKwh` REAL NOT NULL, `solarCapacityKw` REAL NOT NULL, `generatorDieselLitresMonth` REAL NOT NULL, `studentCommuteSplitJson` TEXT NOT NULL, `avgCommuteKm` REAL NOT NULL, `institutionBusCount` INTEGER NOT NULL, `busFuelType` TEXT NOT NULL, `hasCanteen` INTEGER NOT NULL, `canteenFuel` TEXT NOT NULL, `lpgCylindersMonth` INTEGER NOT NULL, `dailyMealsServed` INTEGER NOT NULL, `paperReavesMonth` INTEGER NOT NULL, `annualEventsJson` TEXT NOT NULL, PRIMARY KEY(`id`))")
+        }
+    }
+
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `carbon_logs` ADD COLUMN `wasteKg` REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE `carbon_logs` ADD COLUMN `eventKg` REAL NOT NULL DEFAULT 0.0")
+        }
+    }
+
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `user_profile` ADD COLUMN `fuelType` TEXT NOT NULL DEFAULT 'PETROL'")
+            db.execSQL("ALTER TABLE `user_profile` ADD COLUMN `kmPerDay` REAL NOT NULL DEFAULT 10.0")
+            db.execSQL("ALTER TABLE `user_profile` ADD COLUMN `mealsPerDay` INTEGER NOT NULL DEFAULT 3")
+            db.execSQL("ALTER TABLE `user_profile` ADD COLUMN `deviceCount` INTEGER NOT NULL DEFAULT 2")
+            db.execSQL("ALTER TABLE `user_profile` ADD COLUMN `streamingHeavy` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CarbonDatabase {
@@ -75,7 +95,8 @@ object DatabaseModule {
             CarbonDatabase::class.java,
             "carbon_db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        .fallbackToDestructiveMigration()
         .build()
     }
 
@@ -97,5 +118,10 @@ object DatabaseModule {
     @Provides
     fun provideEnergyDao(database: CarbonDatabase): EnergyLogDao {
         return database.energyDao()
+    }
+
+    @Provides
+    fun provideDigitalDao(database: CarbonDatabase): DigitalLogDao {
+        return database.digitalDao()
     }
 }

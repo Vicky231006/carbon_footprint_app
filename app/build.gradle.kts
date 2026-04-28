@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,12 +19,15 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        val properties = java.util.Properties()
-        val propertiesFile = project.rootProject.file("local.properties")
-        if (propertiesFile.exists()) {
-            properties.load(propertiesFile.inputStream())
+        val props = Properties()
+        val propsFile = rootProject.file("local.properties")
+        if (propsFile.exists()) {
+            propsFile.inputStream().use { props.load(it) }
         }
-        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY") ?: ""}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${props.getProperty("GEMINI_API_KEY") ?: ""}\"")
+        buildConfigField("String", "MONGODB_CLIENT_ID", "\"${props.getProperty("MONGODB_CLIENT_ID") ?: ""}\"")
+        buildConfigField("String", "MONGODB_CLIENT_SECRET", "\"${props.getProperty("MONGODB_CLIENT_SECRET") ?: ""}\"")
+        buildConfigField("String", "MONGODB_URI", "\"${props.getProperty("MONGODB_URI") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -42,6 +47,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "11"
@@ -56,11 +62,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/native-image/**"
         }
     }
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -77,6 +85,8 @@ dependencies {
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    kapt(libs.androidx.hilt.compiler)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -98,8 +108,21 @@ dependencies {
 
     // AI & Cloud Sync
     implementation(libs.generativeai)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.realm.base)
     implementation(libs.realm.sync)
+
+    // Retrofit
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+
+    // MongoDB
+    implementation(libs.mongodb.driver) {
+        exclude(group = "org.mongodb", module = "bson-record-codec")
+    }
+    implementation(libs.mongodb.bson)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

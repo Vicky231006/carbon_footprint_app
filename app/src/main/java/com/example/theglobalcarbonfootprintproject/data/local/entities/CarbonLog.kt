@@ -11,6 +11,8 @@ data class CarbonLog(
     val electricityKg: Double,
     val digitalKg: Double,
     val foodKg: Double,
+    val wasteKg: Double = 0.0,
+    val eventKg: Double = 0.0,
     val totalKg: Double,
     val greenPoints: Int        // earned this day
 )

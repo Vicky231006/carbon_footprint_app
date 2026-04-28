@@ -1,8 +1,10 @@
 package com.example.theglobalcarbonfootprintproject
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,6 +13,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.theglobalcarbonfootprintproject.services.ActivityTrackingService
@@ -20,6 +25,8 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val deepLinkUri: MutableState<Uri?> = mutableStateOf(null)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -31,6 +38,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val prefs = getSharedPreferences("carbon_prefs", MODE_PRIVATE)
+        val onboardingComplete = prefs.getBoolean("onboarding_complete", false)
+        if (!onboardingComplete && intent?.action != Intent.ACTION_VIEW) {
+            // Only force onboarding if not a deep link and not complete
+            // Actually, if it's not complete, we should probably always show onboarding
+        }
+
+        handleIntent(intent)
         
         checkAndRequestPermissions()
 
@@ -40,9 +56,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    NavGraph()
+                    NavGraph(deepLinkUri = deepLinkUri.value)
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.data?.let {
+            deepLinkUri.value = it
         }
     }
 
@@ -68,6 +95,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startTrackingService() {
-        startService(Intent(this, ActivityTrackingService::class.java))
+        val intent = Intent(this, ActivityTrackingService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            startService(intent)
+        }
     }
 }

@@ -17,4 +17,7 @@ interface EnergyLogDao {
 
     @Query("SELECT * FROM energy_logs ORDER BY date DESC")
     fun getAllHistory(): Flow<List<EnergyLog>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM energy_logs WHERE date >= :startOfDay)")
+    fun hasLoggedToday(startOfDay: Long): Flow<Boolean>
 }

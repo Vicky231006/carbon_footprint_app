@@ -98,19 +98,52 @@ class ActivityTrackingService : Service() {
             val totalSteps = event.values[0].toInt()
             val prefs = getSharedPreferences("carbon_prefs", MODE_PRIVATE)
             
-            // If it's the first time today, set baseline
-            val lastResetDate = prefs.getLong("last_step_reset_date", 0L)
-            val today = System.currentTimeMillis() / (24 * 60 * 60 * 1000)
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+            val lastResetDate = prefs.getString("step_reset_date", "")
             
+            // 1. Update the total sensor reading so Dashboard has it for baseline resets
+            prefs.edit().putInt("total_steps_sensor", totalSteps).apply()
+
+            // 2. Handle Daily Reset
             if (lastResetDate != today) {
                 prefs.edit()
                     .putInt("step_baseline_today", totalSteps)
-                    .putLong("last_step_reset_date", today)
+                    .putString("step_reset_date", today)
+                    .putInt("steps_today", 0)
                     .apply()
             }
             
-            val baselineSteps = prefs.getInt("step_baseline_today", totalSteps)
-            val stepsToday = totalSteps - baselineSteps
+            var baselineSteps = prefs.getInt("step_baseline_today", -1)
+            
+            // 3. Handle First Run / Invalid Baseline
+            // If baseline is -1 or 0 (and totalSteps is large), it means we don't have a start-of-day baseline.
+            // We should treat the current totalSteps as the baseline for today.
+            if (baselineSteps <= 0 && totalSteps > 500) {
+                prefs.edit().putInt("step_baseline_today", totalSteps).apply()
+                baselineSteps = totalSteps
+            } else if (baselineSteps == -1) {
+                // If it's truly the first ever reading and totalSteps is small
+                prefs.edit().putInt("step_baseline_today", totalSteps).apply()
+                baselineSteps = totalSteps
+            }
+            
+            // 4. Handle Device Reboots (where totalSteps < baselineSteps)
+            var stepsToday = totalSteps - baselineSteps
+            if (stepsToday < 0) {
+                // Sensor was reset by system. Recalibrate baseline.
+                prefs.edit().putInt("step_baseline_today", totalSteps).apply()
+                stepsToday = 0
+            }
+
+            // 5. Final safety check: if it's still weirdly high (e.g. > 50k in one jump)
+            // and we just started, it's likely a bad baseline.
+            if (stepsToday > 40000 && baselineSteps == 0) {
+                 prefs.edit().putInt("step_baseline_today", totalSteps).apply()
+                 stepsToday = 0
+            }
+
+            // 4. Final safety check: if it's still weirdly high (e.g. > 50k in one jump), 
+            // something is wrong with baseline. But for now, just save it.
             prefs.edit().putInt("steps_today", stepsToday).apply()
         }
 

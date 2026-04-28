@@ -27,7 +27,8 @@ sealed class MainTab(val route: String, val label: String, val icon: ImageVector
 
 @Composable
 fun MainContainer(
-    onNavigateToLog: () -> Unit
+    onNavigateToLog: () -> Unit,
+    onNavigateToProfile: () -> Unit
 ) {
     val navController = rememberNavController()
     val tabs = listOf(MainTab.Dashboard, MainTab.History, MainTab.AI, MainTab.Community)
@@ -58,7 +59,10 @@ fun MainContainer(
     ) { innerPadding ->
         NavHost(navController, startDestination = MainTab.Dashboard.route, Modifier.padding(innerPadding)) {
             composable(MainTab.Dashboard.route) { 
-                DashboardScreen(onNavigateToLog = onNavigateToLog) 
+                DashboardScreen(
+                    onNavigateToLog = onNavigateToLog,
+                    onNavigateToProfile = onNavigateToProfile
+                )
             }
             composable(MainTab.History.route) { HistoryScreen() }
             composable(MainTab.AI.route) { AiAssistantScreen() }

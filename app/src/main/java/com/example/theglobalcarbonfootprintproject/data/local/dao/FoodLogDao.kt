@@ -17,4 +17,7 @@ interface FoodLogDao {
 
     @Query("SELECT * FROM food_logs ORDER BY date DESC")
     fun getAllHistory(): Flow<List<FoodLog>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM food_logs WHERE date >= :startOfDay)")
+    fun hasLoggedToday(startOfDay: Long): Flow<Boolean>
 }
