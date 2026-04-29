@@ -72,8 +72,13 @@ class OnboardingViewModel @Inject constructor(
                     acUsage = currentData.acUsage != ACUsage.NONE,
                     monthlyKwhBase = currentData.monthlyKwhBase,
                     acSeasonality = currentData.acSeasonality,
-                    gridFactor = currentData.gridFactor
+                    gridFactor = currentData.gridFactor,
+                    onboardingComplete = true,
+                    state = currentData.state,
+                    baseline_co2_daily = totalBaseline
                 )
+
+
                 repository.saveUserProfile(profile)
 
                 val initialLog = CarbonLog(

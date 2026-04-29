@@ -53,7 +53,11 @@ class CarbonRepository @Inject constructor(
 
     suspend fun saveLog(log: CarbonLog) {
         carbonDao.insertLog(log)
+        CoroutineScope(Dispatchers.IO).launch {
+            mongoDbManager.saveLog(log)
+        }
     }
+
 
     fun getTotalPoints(): Flow<Int?> = carbonDao.getTotalPoints()
 
@@ -80,8 +84,12 @@ class CarbonRepository @Inject constructor(
     suspend fun updateTransportMode(segmentId: Int, mode: com.example.theglobalcarbonfootprintproject.calculator.TransportMode) =
         transportDao.updateMode(segmentId, mode)
 
-    fun getTodayKmWalked(startOfDay: Long): Flow<Double?> =
-        transportDao.getTodayKmWalked(startOfDay)
+    fun getTodayMotorizedKm(startOfDay: Long): Flow<Double?> =
+        transportDao.getTodayMotorizedKm(startOfDay)
+
+    fun getTodayWalkingKm(startOfDay: Long): Flow<Double?> =
+        transportDao.getTodayWalkingKm(startOfDay)
+
 
     // Food Log Methods
     suspend fun saveFoodLog(log: FoodLog) = foodDao.insert(log)

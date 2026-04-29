@@ -4,7 +4,10 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.viewModelScope
+
 import com.example.theglobalcarbonfootprintproject.calculator.CarbonEngine
 import com.example.theglobalcarbonfootprintproject.calculator.InstitutionCarbonEngine
 import com.example.theglobalcarbonfootprintproject.calculator.SeasonalElectricityCalculator
@@ -36,8 +39,11 @@ class DashboardViewModel @Inject constructor(
     application: Application,
     private val repository: CarbonRepository,
     private val sharedPreferences: SharedPreferences,
-    private val apiService: UserApiService // Inject UserApiService
-) : AndroidViewModel(application) {
+    private val apiService: UserApiService,
+    private val healthConnectManager: com.example.theglobalcarbonfootprintproject.data.health.HealthConnectManager
+) : AndroidViewModel(application), DefaultLifecycleObserver {
+
+
 
     private val _todayLog = MutableStateFlow<CarbonLog?>(null)
     val todayLog: StateFlow<CarbonLog?> = _todayLog.asStateFlow()
@@ -136,16 +142,14 @@ class DashboardViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     val totalCo2Today: StateFlow<Double> = combine(
-        listOf(
-            transportCo2Today,
-            foodCo2Today,
-            energyCo2Today,
-            digitalCo2Today,
-            wasteCo2Today,
-            eventCo2Today,
-            isInstitution
-        )
-    ) { flows ->
+        transportCo2Today,
+        foodCo2Today,
+        energyCo2Today,
+        digitalCo2Today,
+        wasteCo2Today,
+        eventCo2Today,
+        isInstitution
+    ) { flows: Array<Any?> ->
         val trans = flows[0] as Double
         val food = flows[1] as Double
         val energy = flows[2] as Double
@@ -161,17 +165,39 @@ class DashboardViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
+
+
     private val _carbonScore = MutableStateFlow(100)
     val carbonScore: StateFlow<Int> = _carbonScore.asStateFlow()
 
     val institutionName: StateFlow<String?> = institutionProfile.map { it?.name }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val transportKmToday: StateFlow<Double> = repository.getTodayMotorizedKm(startOfDay()).map { it ?: 0.0 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+    val walkingKmToday: StateFlow<Double> = repository.getTodayWalkingKm(startOfDay()).map { it ?: 0.0 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
     val studentStaffCount: StateFlow<Int> = institutionProfile.map { (it?.studentCount ?: 0) + (it?.staffCount ?: 0) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
 
     private val _stepsToday = MutableStateFlow(0)
     val stepsToday: StateFlow<Int> = _stepsToday.asStateFlow()
 
+    private val _healthConnectSteps = MutableStateFlow<Int?>(null)
+    val healthConnectSteps: StateFlow<Int?> = _healthConnectSteps.asStateFlow()
+
+    private val _healthPermissionsGranted = MutableStateFlow(false)
+
+    val healthPermissionsGranted: StateFlow<Boolean> = _healthPermissionsGranted.asStateFlow()
+
+    val isHealthConnectAvailable: Boolean
+        get() = healthConnectManager.isAvailable()
+
+    fun checkHealthPermissions() {
+        viewModelScope.launch {
+            _healthPermissionsGranted.value = healthConnectManager.hasAllPermissions()
+        }
+    }
+
     val unverifiedSegments: StateFlow<List<TransportSegment>> = repository
+
         .getTodaySegments(startOfDay())
         .map { segments -> segments.filter { !it.userVerified && it.activityType == 0 } } // 0 is DetectedActivity.IN_VEHICLE
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -223,8 +249,10 @@ class DashboardViewModel @Inject constructor(
         }
 
         refreshDashboard()
+        checkHealthPermissions()
         updateSteps()
     }
+
 
     override fun onCleared() {
         super.onCleared()
@@ -240,16 +268,37 @@ class DashboardViewModel @Inject constructor(
         return cal.timeInMillis
     }
 
-    fun updateSteps() {
-        _stepsToday.value = sharedPreferences.getInt("steps_today", 0)
+    override fun onResume(owner: LifecycleOwner) {
+        refreshDashboard()
     }
+
+    fun updateSteps() {
+
+        viewModelScope.launch {
+            var fetchedSteps: Int? = null
+            
+            if (healthConnectManager.isAvailable() && healthConnectManager.hasAllPermissions()) {
+                fetchedSteps = healthConnectManager.getStepsToday()?.toInt()
+                Log.d("DashboardVM", "Health Connect steps: $fetchedSteps")
+            }
+            
+            _healthConnectSteps.value = fetchedSteps
+            val finalSteps = fetchedSteps ?: sharedPreferences.getInt("steps_today", 0)
+            Log.d("DashboardVM", "Final steps displayed: $finalSteps")
+            _stepsToday.value = finalSteps
+        }
+    }
+
+
+
 
     fun refreshDashboard() {
         viewModelScope.launch {
+            checkHealthPermissions()
             repository.syncDigitalFootprint(getApplication())
-            // Potentially trigger manual sync for institution data if needed
         }
     }
+
 
     fun verifySegment(segmentId: Int, mode: DomainTransportMode) {
         viewModelScope.launch {
@@ -269,8 +318,9 @@ class DashboardViewModel @Inject constructor(
                 // This part needs to be carefully constructed to provide the correct data for DailyLogRequest
 
                 // Placeholder for now, will refine once repository provides aggregated data for sync
-                val currentTotalCo2 = totalCo2Today.first()
+                // Placeholder for now, will refine once repository provides aggregated data for sync
                 val currentCarbonScore = _carbonScore.value
+
 
                 val logRequest = if (isInst) {
                     val instProfile = institutionProfile.first()
@@ -328,7 +378,8 @@ class DashboardViewModel @Inject constructor(
                         eventKg = 0.0,
                         totalKg = breakdown?.values?.sum() ?: 0.0,
                         score = currentCarbonScore,
-                        kmWalked = repository.getTodayKmWalked(startOfDay()).first() ?: 0.0,
+                        kmWalked = repository.getTodayWalkingKm(startOfDay()).first() ?: 0.0,
+
                         stepsCount = sharedPreferences.getInt("steps_today", 0),
                         energyLogged = repository.hasLoggedEnergyToday(startOfDay()).first(),
                         foodLogged = repository.hasLoggedFoodToday(startOfDay()).first(),

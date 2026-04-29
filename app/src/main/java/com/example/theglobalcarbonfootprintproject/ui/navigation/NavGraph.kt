@@ -17,6 +17,7 @@ import android.content.Context
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
+    object Welcome : Screen("welcome")
     object Onboarding : Screen("onboarding")
     object Main : Screen("main")
     object LogActivity : Screen("log_activity")
@@ -28,6 +29,8 @@ sealed class Screen(val route: String) {
 fun NavGraph(deepLinkUri: Uri? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
+    val prefs = context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE)
+
 
     LaunchedEffect(deepLinkUri) {
         deepLinkUri?.let { uri ->
@@ -45,19 +48,36 @@ fun NavGraph(deepLinkUri: Uri? = null) {
     ) {
         composable(Screen.Splash.route) {
             SplashScreen(onSplashFinished = {
-                val prefs = context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE)
                 val onboardingComplete = prefs.getBoolean("onboarding_complete", false)
+
+                val userId = prefs.getString("user_id", null)
+                android.util.Log.d("NavGraph", "Splash check: onboardingComplete=$onboardingComplete, userId=$userId")
                 
-                if (onboardingComplete) {
+                if (onboardingComplete && userId != null) {
+
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 } else {
-                    navController.navigate(Screen.Onboarding.route) {
+                    navController.navigate(Screen.Welcome.route) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 }
             })
+        }
+        composable(Screen.Welcome.route) {
+            com.example.theglobalcarbonfootprintproject.ui.screens.auth.WelcomeScreen(
+                onLoginSuccess = {
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                },
+                onRegisterSuccess = {
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                }
+            )
         }
         composable(Screen.Onboarding.route) {
             OnboardingScreen(onOnboardingComplete = {
@@ -87,10 +107,12 @@ fun NavGraph(deepLinkUri: Uri? = null) {
                 onBack = { navController.popBackStack() },
                 onNavigateToMetrics = { navController.navigate(Screen.Metrics.route) },
                 onSignOut = {
-                    navController.navigate(Screen.Onboarding.route) {
+                    prefs.edit().clear().apply() // Clear session on sign out
+                    navController.navigate(Screen.Welcome.route) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
+
             )
         }
         composable(Screen.Metrics.route) {

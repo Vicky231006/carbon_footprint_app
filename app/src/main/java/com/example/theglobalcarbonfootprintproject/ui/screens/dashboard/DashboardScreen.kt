@@ -19,7 +19,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.CheckCircle
 import java.util.Locale
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +35,7 @@ fun DashboardScreen(
     onNavigateToProfile: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val todayLog by viewModel.todayLog.collectAsState()
+
     val carbonScore by viewModel.carbonScore.collectAsState()
     val transportCo2Today by viewModel.transportCo2Today.collectAsState()
     val foodCo2Today by viewModel.foodCo2Today.collectAsState()
@@ -43,8 +50,15 @@ fun DashboardScreen(
     val studentStaffCount by viewModel.studentStaffCount.collectAsState()
     
     val animatedCarbon = remember { Animatable(0f) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.addObserver(viewModel)
+    }
 
     LaunchedEffect(totalCo2Today) {
+
         animatedCarbon.animateTo(
             targetValue = totalCo2Today.toFloat(),
             animationSpec = tween(durationMillis = 1500)
@@ -179,16 +193,56 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    DashboardCategoryRow("Transport", transportCo2Today, Icons.Default.DirectionsCar)
+                    val healthGranted by viewModel.healthPermissionsGranted.collectAsState()
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    if (viewModel.isHealthConnectAvailable) {
+                        if (!healthGranted) {
+                            HealthConnectSyncCard {
+                                (context as? com.example.theglobalcarbonfootprintproject.MainActivity)?.let { activity ->
+                                    activity.healthConnectPermissionLauncher.launch(
+                                        setOf(androidx.health.connect.client.permission.HealthPermission.getReadPermission(androidx.health.connect.client.records.StepsRecord::class))
+                                    )
+                                }
+                            }
+                        } else {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    val hcSteps by viewModel.healthConnectSteps.collectAsState()
+                                    Text(
+                                        text = if (hcSteps != null) "Syncing with Health Connect ($hcSteps steps)" else "Syncing with Health Connect",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+
+
+                    val transportKm by viewModel.transportKmToday.collectAsState()
+                    DashboardTransportRow(transportCo2Today, transportKm)
 
                     val kmWalked = stepsToday * 0.000762
                     val co2SavedGrams = kmWalked * 210
-
                     DashboardStepRow(stepsToday, kmWalked, co2SavedGrams)
 
-                    DashboardCategoryRow("Energy", energyCo2Today, Icons.Default.Bolt)
+                    val profile by viewModel.individualProfile.collectAsState()
+                    val dailyKwh = (profile?.monthlyKwhBase ?: 150.0) / 30.0
+                    DashboardEnergyRow(energyCo2Today, dailyKwh)
+
                     DashboardCategoryRow("Food", foodCo2Today, Icons.Default.Restaurant)
                     DashboardCategoryRow("Digital", digitalCo2Today, Icons.Default.Smartphone)
+
                 }
                 
                 Spacer(modifier = Modifier.height(80.dp)) // Extra space to prevent FAB overlap
@@ -205,7 +259,8 @@ fun DashboardStepRow(steps: Int, km: Double, savedGrams: Double) {
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.DirectionsWalk, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(28.dp))
+        Icon(Icons.AutoMirrored.Filled.DirectionsWalk, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(28.dp))
+
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text("You walked %.1f km today".format(km), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
@@ -258,7 +313,8 @@ fun DisambiguationCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.HelpOutline, null)
+                Icon(Icons.AutoMirrored.Filled.HelpOutline, null)
+
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Confirm your vehicle mode", fontWeight = FontWeight.Bold)
             }
@@ -280,4 +336,99 @@ fun DisambiguationCard(
             }
         }
     }
+}
+
+@Composable
+fun HealthConnectSyncCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.HealthAndSafety, null, tint = Color(0xFF2E7D32))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Sync with Health Connect", fontWeight = FontWeight.Bold)
+                Text("Get accurate steps from your phone", style = MaterialTheme.typography.bodySmall)
+            }
+            Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))) {
+                Text("Enable", color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun DashboardTransportRow(co2: Double, km: Double) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.DirectionsCar,
+            null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Transport", fontWeight = FontWeight.Bold)
+            if (km > 0.1) {
+                Text(
+                    "You traveled ${String.format(Locale.US, "%.1f", km)} km today",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Estimated from your profile",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Text(
+            "${String.format(Locale.US, "%.1f", co2)} kg",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+}
+
+@Composable
+fun DashboardEnergyRow(co2: Double, kwh: Double) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.Bolt,
+            null,
+            tint = Color(0xFFFBC02D),
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Energy", fontWeight = FontWeight.Bold)
+            Text(
+                "Daily usage: ${String.format(Locale.US, "%.1f", kwh)} kWh",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            "${String.format(Locale.US, "%.1f", co2)} kg",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }

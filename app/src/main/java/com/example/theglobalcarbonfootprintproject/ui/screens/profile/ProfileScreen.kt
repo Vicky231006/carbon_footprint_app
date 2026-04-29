@@ -124,33 +124,6 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // SYNC TO MONGO BUTTON
-            var isSyncing by remember { mutableStateOf(false) }
-            Button(
-                onClick = { 
-                    isSyncing = true
-                    viewModel.syncToMongo { success ->
-                        isSyncing = false
-                        val msg = if (success) "Sync triggered! Check MongoDB Atlas." else "No local profile found to sync."
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                enabled = !isSyncing
-            ) {
-                if (isSyncing) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sync to MongoDB")
-                }
-            }
-
             // SIGN OUT BUTTON
             OutlinedButton(
                 onClick = { showSignOutDialog = true },

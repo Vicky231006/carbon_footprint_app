@@ -21,5 +21,10 @@ data class UserProfile(
     val acUsage: Boolean,
     val monthlyKwhBase: Double,
     val acSeasonality: ACSeasonality,
-    val gridFactor: Double = 0.85    // Default India grid factor
+    val gridFactor: Double = 0.85,
+    val onboardingComplete: Boolean = false,
+    val state: String = "",
+    val baseline_co2_daily: Double = 0.0
 )
+
+

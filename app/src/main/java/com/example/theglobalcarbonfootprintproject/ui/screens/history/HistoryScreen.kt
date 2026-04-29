@@ -1,15 +1,18 @@
 package com.example.theglobalcarbonfootprintproject.ui.screens.history
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,36 +26,58 @@ fun HistoryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
-    val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
+    val dayFormat = SimpleDateFormat("dd", Locale.getDefault())
+    val monthFormat = SimpleDateFormat("MMM", Locale.getDefault())
+
+    var selectedDate by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // Filter logic
+    val calSelected = Calendar.getInstance().apply { timeInMillis = selectedDate }
+    val isSameDay = { time: Long ->
+        val calLog = Calendar.getInstance().apply { timeInMillis = time }
+        calSelected.get(Calendar.YEAR) == calLog.get(Calendar.YEAR) &&
+        calSelected.get(Calendar.DAY_OF_YEAR) == calLog.get(Calendar.DAY_OF_YEAR)
+    }
+
+    val filteredTransport = state.transportHistory.filter { isSameDay(it.date) }
+    val filteredFood = state.foodHistory.filter { isSameDay(it.date) }
+    val filteredEnergy = state.energyHistory.filter { isSameDay(it.date) }
 
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)) {
-        Text("Your Carbon History", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("Your Carbon Calendar", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         
         Spacer(modifier = Modifier.height(24.dp))
 
-        // HEATMAP / BAR CHART REPRESENTATION
-        Text("Daily Activity", style = MaterialTheme.typography.titleMedium)
+        // CALENDAR SCROLL
+        Text("Select Day", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(12.dp))
         
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             items(state.dailyAggregates.reversed()) { day ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    val height = (day.totalKg * 10).coerceIn(20.0, 100.0).dp
-                    val color = if (day.totalKg < 9.58) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    
-                    Box(
-                        modifier = Modifier
-                            .width(30.dp)
-                            .height(height)
-                            .background(color, RoundedCornerShape(4.dp))
+                val isSelected = isSameDay(day.date)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                        .clickable { selectedDate = day.date }
+                        .padding(8.dp)
+                ) {
+                    Text(monthFormat.format(Date(day.date)), style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        dayFormat.format(Date(day.date)), 
+                        style = MaterialTheme.typography.titleMedium, 
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(dayFormat.format(Date(day.date)), style = MaterialTheme.typography.labelSmall)
+                    val color = if (day.totalKg < 10.0) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
                 }
             }
         }
@@ -63,17 +88,17 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            item { Text("Recent Logs", style = MaterialTheme.typography.titleMedium) }
+            item { Text("Logs for Selected Day", style = MaterialTheme.typography.titleMedium) }
             
-            if (state.transportHistory.isEmpty() && state.foodHistory.isEmpty() && state.energyHistory.isEmpty()) {
+            if (filteredTransport.isEmpty() && filteredFood.isEmpty() && filteredEnergy.isEmpty()) {
                 item {
-                    Text("No logs found. Start tracking today!", 
+                    Text("No logs found for this day.", 
                          style = MaterialTheme.typography.bodyMedium, 
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
-            items(state.transportHistory.take(10)) { segment ->
+            items(filteredTransport) { segment ->
                 HistoryItem(
                     title = "Transport: ${segment.transportMode}",
                     value = "${String.format(Locale.getDefault(), "%.2f", segment.co2Kg)} kg",
@@ -82,7 +107,7 @@ fun HistoryScreen(
                 )
             }
 
-            items(state.foodHistory.take(10)) { log ->
+            items(filteredFood) { log ->
                 HistoryItem(
                     title = "Food: ${log.mealType}",
                     value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
@@ -91,32 +116,13 @@ fun HistoryScreen(
                 )
             }
 
-            items(state.energyHistory.take(10)) { log ->
+            items(filteredEnergy) { log ->
                 HistoryItem(
                     title = "Energy: ${log.energyType}",
                     value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
                     date = dateFormat.format(Date(log.date)),
                     subtitle = log.value.toString()
                 )
-            }
-
-            items(state.dailyAggregates.filter { it.wasteKg > 0 || it.eventKg > 0 }.take(10)) { log ->
-                if (log.wasteKg > 0) {
-                    HistoryItem(
-                        title = "Resource: Waste/Paper",
-                        value = "${String.format(Locale.getDefault(), "%.2f", log.wasteKg)} kg",
-                        date = dateFormat.format(Date(log.date)),
-                        subtitle = "Institutional Daily Waste"
-                    )
-                }
-                if (log.eventKg > 0) {
-                    HistoryItem(
-                        title = "Resource: Annual Events",
-                        value = "${String.format(Locale.getDefault(), "%.2f", log.eventKg)} kg",
-                        date = dateFormat.format(Date(log.date)),
-                        subtitle = "Events Amortized Daily"
-                    )
-                }
             }
         }
     }

@@ -21,7 +21,8 @@ import com.example.theglobalcarbonfootprintproject.data.local.entities.*
         EnergyLog::class,
         DigitalLog::class
     ],
-    version = 10,
+    version = 11,
+
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -36,6 +36,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    val healthConnectPermissionLauncher = registerForActivityResult(
+        androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        // Re-check permissions in ViewModel will happen via Lifecycle resumed
+    }
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

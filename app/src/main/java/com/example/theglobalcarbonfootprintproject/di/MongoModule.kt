@@ -17,7 +17,7 @@ import javax.inject.Singleton
 object MongoModule {
     
     // Use the computer's actual Wi-Fi IP address so the physical phone can reach it
-    private const val BASE_URL = "http://192.168.1.104:3000/"
+    private const val BASE_URL = "http://192.168.1.106:3000/"
 
     @Provides
     @Singleton
