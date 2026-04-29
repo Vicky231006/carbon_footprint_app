@@ -1,10 +1,15 @@
 package com.example.theglobalcarbonfootprintproject.ui.screens.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,7 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -229,19 +236,138 @@ fun DashboardScreen(
 
 
 
-                    val transportKm by viewModel.transportKmToday.collectAsState()
-                    DashboardTransportRow(transportCo2Today, transportKm)
+                    var expandedCategory by remember { mutableStateOf<String?>(null) }
 
+                    val transportKm by viewModel.transportKmToday.collectAsState()
+                    val profile by viewModel.individualProfile.collectAsState()
+
+                    // ─── Transport Row ───
+                    DashboardTransportRow(transportCo2Today, transportKm,
+                        expanded = expandedCategory == "transport",
+                        onClick = { expandedCategory = if (expandedCategory == "transport") null else "transport" }
+                    )
+                    AnimatedVisibility(
+                        visible = expandedCategory == "transport",
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        val mode = profile?.travelMode ?: "CAR"
+                        val km = profile?.kmPerDay ?: 10.0
+                        val factor = when (mode.uppercase()) {
+                            "WALK_BIKE" -> 0.0; "METRO" -> 0.041; "BUS" -> 0.089
+                            "TWO_WHEELER" -> 0.065; "CAR" -> 0.210; "MIXED" -> 0.12
+                            else -> 0.21
+                        }
+                        BreakdownCard(
+                            title = "How we calculated Transport",
+                            lines = if (transportKm > 0.1) {
+                                listOf(
+                                    "Source: Auto-detected travel today",
+                                    "Distance tracked: ${String.format(Locale.US, "%.1f", transportKm)} km",
+                                    "Total CO₂: ${String.format(Locale.US, "%.1f", transportCo2Today)} kg"
+                                )
+                            } else {
+                                listOf(
+                                    "Source: Estimated from your profile",
+                                    "Your mode: $mode | Distance: ${String.format(Locale.US, "%.1f", km)} km/day",
+                                    "Emission factor: $factor kg CO₂ per km",
+                                    "${String.format(Locale.US, "%.1f", km)} km × $factor = ${String.format(Locale.US, "%.2f", transportCo2Today)} kg"
+                                )
+                            }
+                        )
+                    }
+
+                    // ─── Steps Row ───
                     val kmWalked = stepsToday * 0.000762
                     val co2SavedGrams = kmWalked * 210
                     DashboardStepRow(stepsToday, kmWalked, co2SavedGrams)
 
-                    val profile by viewModel.individualProfile.collectAsState()
-                    val dailyKwh = (profile?.monthlyKwhBase ?: 150.0) / 30.0
-                    DashboardEnergyRow(energyCo2Today, dailyKwh)
+                    // ─── Energy Row ───
+                    val monthlyKwh = profile?.monthlyKwhBase ?: 150.0
+                    val gridFactor = profile?.gridFactor ?: 0.82
+                    val dailyKwh = monthlyKwh / 30.0
+                    DashboardEnergyRow(energyCo2Today, dailyKwh,
+                        expanded = expandedCategory == "energy",
+                        onClick = { expandedCategory = if (expandedCategory == "energy") null else "energy" }
+                    )
+                    AnimatedVisibility(
+                        visible = expandedCategory == "energy",
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        val season = com.example.theglobalcarbonfootprintproject.calculator.SeasonalElectricityCalculator.getSeasonLabel()
+                        val loggedEnergy by viewModel.loggedEnergyToday.collectAsState()
+                        BreakdownCard(
+                            title = "How we calculated Energy",
+                            lines = listOf(
+                                "Source: Profile estimate + Manual logs",
+                                "Monthly usage: ${String.format(Locale.US, "%.0f", monthlyKwh)} kWh",
+                                "Daily usage: ${String.format(Locale.US, "%.1f", dailyKwh)} kWh ($season)",
+                                "Grid emission factor: $gridFactor kg CO₂/kWh",
+                                "Profile Estimate: ${String.format(Locale.US, "%.2f", energyCo2Today - loggedEnergy)} kg CO₂",
+                                if (loggedEnergy > 0) "Manual logs today: ${String.format(Locale.US, "%.2f", loggedEnergy)} kg CO₂" else "",
+                                "Total Result: ${String.format(Locale.US, "%.2f", energyCo2Today)} kg CO₂"
+                            ).filter { it.isNotEmpty() }
+                        )
 
-                    DashboardCategoryRow("Food", foodCo2Today, Icons.Default.Restaurant)
-                    DashboardCategoryRow("Digital", digitalCo2Today, Icons.Default.Smartphone)
+
+                    }
+
+                    // ─── Food Row ───
+                    DashboardCategoryRow("Food", foodCo2Today, Icons.Default.Restaurant,
+                        expanded = expandedCategory == "food",
+                        onClick = { expandedCategory = if (expandedCategory == "food") null else "food" }
+                    )
+                    AnimatedVisibility(
+                        visible = expandedCategory == "food",
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        val diet = profile?.dietType ?: "MIXED"
+                        val meals = profile?.mealsPerDay ?: 3
+                        val profileEstimate = when (diet.uppercase()) {
+                            "VEGAN" -> 0.50; "VEGETARIAN" -> 0.70; "MIXED" -> 1.20; "MEAT_HEAVY" -> 2.50; else -> 1.20
+                        } * meals
+                        val isLogged = Math.abs(foodCo2Today - profileEstimate) > 0.01 && foodCo2Today > 0
+                        BreakdownCard(
+                            title = "How we calculated Food",
+                            lines = if (isLogged) {
+                                listOf(
+                                    "Source: Your logged meals today",
+                                    "Total from food logs: ${String.format(Locale.US, "%.2f", foodCo2Today)} kg CO₂"
+                                )
+                            } else {
+                                listOf(
+                                    "Source: Estimated from your diet profile",
+                                    "Diet type: $diet | Meals/day: $meals",
+                                    "Estimated: ${String.format(Locale.US, "%.2f", foodCo2Today)} kg CO₂"
+                                )
+                            }
+                        )
+                    }
+
+                    // ─── Digital Row ───
+                    DashboardCategoryRow("Digital", digitalCo2Today, Icons.Default.Smartphone,
+                        expanded = expandedCategory == "digital",
+                        onClick = { expandedCategory = if (expandedCategory == "digital") null else "digital" }
+                    )
+                    AnimatedVisibility(
+                        visible = expandedCategory == "digital",
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        BreakdownCard(
+                            title = "How we calculated Digital",
+                            lines = listOf(
+                                "Source: Actual screen time tracked by your phone",
+                                "We measure your total app usage today",
+                                "Rate: ~0.036 kg CO₂ per hour of screen time",
+                                "Your total today: ${String.format(Locale.US, "%.1f", digitalCo2Today)} kg CO₂"
+                            )
+                        )
+                    }
+
+
 
                 }
                 
@@ -282,11 +408,13 @@ fun DashboardCategoryRow(
     label: String, 
     value: Double, 
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSteps: Boolean = false
+    expanded: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -294,13 +422,23 @@ fun DashboardCategoryRow(
         Spacer(modifier = Modifier.width(16.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Text(
-            text = if (isSteps) value.toInt().toString() else "${String.format(Locale.getDefault(), "%.1f", value)} kg",
+            text = "${String.format(Locale.getDefault(), "%.1f", value)} kg",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold
         )
+        if (onClick != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }
+
 
 @Composable
 fun DisambiguationCard(
@@ -362,73 +500,73 @@ fun HealthConnectSyncCard(onClick: () -> Unit) {
 }
 
 @Composable
-fun DashboardTransportRow(co2: Double, km: Double) {
+fun DashboardTransportRow(co2: Double, km: Double, expanded: Boolean = false, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            Icons.Default.DirectionsCar,
-            null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
+        Icon(Icons.Default.DirectionsCar, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text("Transport", fontWeight = FontWeight.Bold)
-            if (km > 0.1) {
-                Text(
-                    "You traveled ${String.format(Locale.US, "%.1f", km)} km today",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    "Estimated from your profile",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                if (km > 0.1) "You traveled ${String.format(Locale.US, "%.1f", km)} km today" else "Estimated from your profile",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Text(
-            "${String.format(Locale.US, "%.1f", co2)} kg",
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium
-        )
+        Text("${String.format(Locale.US, "%.1f", co2)} kg", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        if (onClick != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }
 
 @Composable
-fun DashboardEnergyRow(co2: Double, kwh: Double) {
+fun DashboardEnergyRow(co2: Double, kwh: Double, expanded: Boolean = false, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            Icons.Default.Bolt,
-            null,
-            tint = Color(0xFFFBC02D),
-            modifier = Modifier.size(24.dp)
-        )
+        Icon(Icons.Default.Bolt, null, tint = Color(0xFFFBC02D), modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text("Energy", fontWeight = FontWeight.Bold)
-            Text(
-                "Daily usage: ${String.format(Locale.US, "%.1f", kwh)} kWh",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Daily usage: ${String.format(Locale.US, "%.1f", kwh)} kWh", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(
-            "${String.format(Locale.US, "%.1f", co2)} kg",
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium
-        )
+        Text("${String.format(Locale.US, "%.1f", co2)} kg", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        if (onClick != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+}
+
+@Composable
+fun BreakdownCard(title: String, lines: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(8.dp))
+            lines.forEach { line ->
+                Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                    Text("•", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 8.dp))
+                    Text(line, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
 }

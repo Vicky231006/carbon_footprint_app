@@ -58,6 +58,11 @@ class CarbonRepository @Inject constructor(
         }
     }
 
+    suspend fun getLogCountForDay(dayStart: Long): Int = carbonDao.getLogCountForDay(dayStart)
+
+    suspend fun deleteLogsForDay(dayStart: Long) = carbonDao.deleteLogsForDay(dayStart)
+
+
 
     fun getTotalPoints(): Flow<Int?> = carbonDao.getTotalPoints()
 
@@ -135,6 +140,7 @@ class CarbonRepository @Inject constructor(
     fun getAllTransportHistory(): Flow<List<TransportSegment>> = transportDao.getAllHistory()
     fun getAllFoodHistory(): Flow<List<FoodLog>> = foodDao.getAllHistory()
     fun getAllEnergyHistory(): Flow<List<EnergyLog>> = energyDao.getAllHistory()
+    fun getAllDigitalHistory(): Flow<List<DigitalLog>> = digitalDao.getAllHistory()
 
     suspend fun syncCurrentUser() {
         // Disabled MongoDB sync

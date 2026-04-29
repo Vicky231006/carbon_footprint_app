@@ -47,7 +47,14 @@ interface CarbonDao {
 
     @Query("SELECT COUNT(*) FROM carbon_logs WHERE date >= :dayStart AND date < :dayStart + 86400000")
     suspend fun getLogCountForDay(dayStart: Long): Int
+
+    @Query("DELETE FROM carbon_logs WHERE date >= :dayStart AND date < :dayStart + 86400000")
+    suspend fun deleteLogsForDay(dayStart: Long)
+
+    @Query("SELECT * FROM carbon_logs WHERE date >= :dayStart AND date < :dayStart + 86400000")
+    suspend fun getLogsForDay(dayStart: Long): List<CarbonLog>
 }
+
 
 data class DailyTotal(
     val dayEpoch: Long,

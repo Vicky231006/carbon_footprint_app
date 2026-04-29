@@ -16,8 +16,10 @@ data class HistoryUiState(
     val transportHistory: List<TransportSegment> = emptyList(),
     val foodHistory: List<FoodLog> = emptyList(),
     val energyHistory: List<EnergyLog> = emptyList(),
+    val digitalHistory: List<com.example.theglobalcarbonfootprintproject.data.local.entities.DigitalLog> = emptyList(),
     val dailyAggregates: List<CarbonLog> = emptyList()
 )
+
 
 data class DailyAggregate(
     val date: Long,
@@ -33,15 +35,18 @@ class HistoryViewModel @Inject constructor(
         repository.getAllTransportHistory(),
         repository.getAllFoodHistory(),
         repository.getAllEnergyHistory(),
+        repository.getAllDigitalHistory(),
         repository.getAllLogs()
-    ) { transport, food, energy, logs ->
+    ) { transport, food, energy, digital, logs ->
         HistoryUiState(
             transportHistory = transport,
             foodHistory = food,
             energyHistory = energy,
+            digitalHistory = digital,
             dailyAggregates = logs.sortedByDescending { it.date }
         )
-    }.stateIn(
+    }
+.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HistoryUiState()

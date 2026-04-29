@@ -102,19 +102,21 @@ class DashboardViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
-    val energyCo2Today: StateFlow<Double> = combine(isInstitution, individualProfile, institutionProfile) {
-            isInst, indProfile, instProfile ->
+    val energyCo2Today: StateFlow<Double> = combine(isInstitution, individualProfile, institutionProfile, repository.getTodayEnergyCo2(startOfDay())) {
+            isInst, indProfile, instProfile, loggedEnergy ->
         if (isInst && instProfile != null) {
             val instResult = InstitutionCarbonEngine.calculateDailyTotal(instProfile)
             instResult.energyKg
         } else if (!isInst && indProfile != null) {
-            SeasonalElectricityCalculator.getDailyCo2(
+            val baseline = SeasonalElectricityCalculator.getDailyCo2(
                 baseKwh = indProfile.monthlyKwhBase,
                 seasonality = indProfile.acSeasonality,
                 gridFactor = indProfile.gridFactor
             )
+            baseline + (loggedEnergy ?: 0.0)
         } else 0.0
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
 
     val digitalCo2Today: StateFlow<Double> = combine(isInstitution, repository.getTodayDigitalCo2(startOfDay())) {
         isInst, individualDigital ->
@@ -140,6 +142,11 @@ class DashboardViewModel @Inject constructor(
             instResult.eventKg
         } else 0.0
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val loggedEnergyToday: StateFlow<Double> = repository.getTodayEnergyCo2(startOfDay())
+        .map { it ?: 0.0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
 
     val totalCo2Today: StateFlow<Double> = combine(
         transportCo2Today,
@@ -259,7 +266,7 @@ class DashboardViewModel @Inject constructor(
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(observer)
     }
 
-    private fun startOfDay(): Long {
+    fun startOfDay(): Long {
         val cal = Calendar.getInstance()
         cal.set(Calendar.HOUR_OF_DAY, 0)
         cal.set(Calendar.MINUTE, 0)
@@ -273,7 +280,6 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun updateSteps() {
-
         viewModelScope.launch {
             var fetchedSteps: Int? = null
             
@@ -286,8 +292,28 @@ class DashboardViewModel @Inject constructor(
             val finalSteps = fetchedSteps ?: sharedPreferences.getInt("steps_today", 0)
             Log.d("DashboardVM", "Final steps displayed: $finalSteps")
             _stepsToday.value = finalSteps
+
+            // Step bonus points
+            val start = startOfDay()
+            if (finalSteps >= 10000 && !repository.hasRewardForReason("steps_10k", start)) {
+                repository.saveReward(com.example.theglobalcarbonfootprintproject.data.local.entities.RewardRecord(
+                    date = System.currentTimeMillis(), pointsEarned = 20, reason = "steps_10k"
+                ))
+                Log.d("DashboardVM", "Awarded 20 pts for 10k steps")
+            } else if (finalSteps >= 5000 && !repository.hasRewardForReason("steps_5k", start)) {
+                repository.saveReward(com.example.theglobalcarbonfootprintproject.data.local.entities.RewardRecord(
+                    date = System.currentTimeMillis(), pointsEarned = 10, reason = "steps_5k"
+                ))
+                Log.d("DashboardVM", "Awarded 10 pts for 5k steps")
+            } else if (finalSteps >= 1000 && !repository.hasRewardForReason("steps_1k", start)) {
+                repository.saveReward(com.example.theglobalcarbonfootprintproject.data.local.entities.RewardRecord(
+                    date = System.currentTimeMillis(), pointsEarned = 5, reason = "steps_1k"
+                ))
+                Log.d("DashboardVM", "Awarded 5 pts for 1k steps")
+            }
         }
     }
+
 
 
 
@@ -297,7 +323,54 @@ class DashboardViewModel @Inject constructor(
             checkHealthPermissions()
             repository.syncDigitalFootprint(getApplication())
         }
+        // Save today's snapshot as a CarbonLog (for history charts + MongoDB sync)
+        // This is an Upsert: delete existing log for today and save fresh one
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Wait for profile to load (max 5 seconds)
+                var count = 0
+                while (individualProfile.value == null && count < 10) {
+                    kotlinx.coroutines.delay(500)
+                    count++
+                }
+
+                kotlinx.coroutines.delay(2000) // Extra time for flows to settle
+                
+                val trans = transportCo2Today.value
+                val food = foodCo2Today.value
+                val energy = energyCo2Today.value
+                val digital = digitalCo2Today.value
+                val waste = wasteCo2Today.value
+                val event = eventCo2Today.value
+                val total = trans + food + energy + digital + waste + event
+                val points = _carbonScore.value
+
+                if (total > 0) {
+                    // Delete any previous log for today to avoid duplicates
+                    repository.deleteLogsForDay(startOfDay())
+                    
+                    val log = CarbonLog(
+                        date = System.currentTimeMillis(),
+                        transportKg = trans,
+                        electricityKg = energy,
+                        digitalKg = digital,
+                        foodKg = food,
+                        wasteKg = waste,
+                        eventKg = event,
+                        totalKg = total,
+                        greenPoints = points
+                    )
+                    repository.saveLog(log)
+                    Log.d("DashboardVM", "Upserted daily log: total=$total kg")
+                }
+            } catch (e: Exception) {
+                Log.w("DashboardVM", "Failed to save daily log: ${e.message}")
+            }
+        }
     }
+
+
+
 
 
     fun verifySegment(segmentId: Int, mode: DomainTransportMode) {

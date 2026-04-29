@@ -12,7 +12,7 @@ interface DigitalLogDao {
     @Query("SELECT * FROM digital_logs WHERE date >= :startOfDay ORDER BY date DESC")
     fun getTodayLogs(startOfDay: Long): Flow<List<DigitalLog>>
 
-    @Query("SELECT SUM(co2Kg) FROM digital_logs WHERE date >= :startOfDay")
+    @Query("SELECT MAX(co2Kg) FROM digital_logs WHERE date >= :startOfDay")
     fun getTodayDigitalCo2(startOfDay: Long): Flow<Double?>
 
     @Query("SELECT * FROM digital_logs ORDER BY date DESC")
