@@ -38,15 +38,17 @@ fun CommunityScreen(
         ) {
             Column {
                 Text(
-                    text = "Leaderboard",
+                    text = if (state.isInstitution) "State Leaderboard" else "Leaderboard",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Top Eco-Warriors in ${state.userState}",
+                    text = if (state.isInstitution) "Top Institutions in ${state.userState}" else "Top Eco-Warriors in ${state.userState}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+
             }
             IconButton(onClick = { viewModel.fetchLeaderboard() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -122,8 +124,14 @@ fun LeaderboardItem(rank: Int, name: String, score: Double) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = "Daily Baseline", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = if (name.contains("IIT") || name.contains("University") || name.contains("Campus")) "Daily Per-Capita CO₂" else "Daily Baseline",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+
+
 
             Text(
                 text = "${String.format(Locale.getDefault(), "%.1f", score)} kg",

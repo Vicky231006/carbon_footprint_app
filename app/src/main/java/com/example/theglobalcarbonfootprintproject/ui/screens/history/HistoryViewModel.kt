@@ -17,8 +17,10 @@ data class HistoryUiState(
     val foodHistory: List<FoodLog> = emptyList(),
     val energyHistory: List<EnergyLog> = emptyList(),
     val digitalHistory: List<com.example.theglobalcarbonfootprintproject.data.local.entities.DigitalLog> = emptyList(),
-    val dailyAggregates: List<CarbonLog> = emptyList()
+    val dailyAggregates: List<CarbonLog> = emptyList(),
+    val isInstitution: Boolean = false
 )
+
 
 
 data class DailyAggregate(
@@ -28,8 +30,14 @@ data class DailyAggregate(
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val repository: CarbonRepository
+    private val repository: CarbonRepository,
+    private val sharedPreferences: android.content.SharedPreferences
 ) : ViewModel() {
+
+    private val isInstitutionFlow = kotlinx.coroutines.flow.flow {
+        val type = sharedPreferences.getString("user_type", "INDIVIDUAL")
+        emit(type == "INSTITUTION")
+    }
 
     val uiState: StateFlow<HistoryUiState> = combine(
         repository.getAllTransportHistory(),
@@ -45,10 +53,14 @@ class HistoryViewModel @Inject constructor(
             digitalHistory = digital,
             dailyAggregates = logs.sortedByDescending { it.date }
         )
+    }.combine(isInstitutionFlow) { state, isInst ->
+        state.copy(isInstitution = isInst)
     }
-.stateIn(
+    .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HistoryUiState()
     )
 }
+
+

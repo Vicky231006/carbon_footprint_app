@@ -5,8 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
+
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.*
@@ -17,11 +17,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+
+
+import androidx.compose.material.icons.automirrored.filled.Send
 
 @Composable
 fun AiAssistantScreen(
     viewModel: AiAssistantViewModel = hiltViewModel()
 ) {
+
     val state by viewModel.uiState.collectAsState()
     var textInput by remember { mutableStateOf("") }
 
@@ -108,8 +116,9 @@ fun AiAssistantScreen(
                     }
                 }
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary)
             }
+
         }
     }
 }
@@ -149,7 +158,7 @@ fun ChatBubble(message: ChatMessage) {
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Text(
+            MarkdownText(
                 text = message.text,
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodyMedium
@@ -157,3 +166,68 @@ fun ChatBubble(message: ChatMessage) {
         }
     }
 }
+
+@Composable
+fun MarkdownText(text: String, modifier: Modifier = Modifier, style: androidx.compose.ui.text.TextStyle) {
+    val annotatedString = parseMarkdown(text)
+    Text(
+        text = annotatedString,
+        modifier = modifier,
+        style = style
+    )
+}
+
+private fun parseMarkdown(text: String): AnnotatedString {
+    return buildAnnotatedString {
+        val lines = text.split("\n")
+        lines.forEachIndexed { index, line ->
+            var remainingLine = line
+            
+            // Handle Lists
+            if (remainingLine.trimStart().startsWith("- ") || remainingLine.trimStart().startsWith("• ")) {
+                append("  • ")
+                remainingLine = remainingLine.trimStart().substring(2)
+            }
+
+            // Handle Bold and Italic within the line
+            var i = 0
+            while (i < remainingLine.length) {
+                when {
+                    remainingLine.startsWith("**", i) -> {
+                        val end = remainingLine.indexOf("**", i + 2)
+                        if (end != -1) {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append(remainingLine.substring(i + 2, end))
+                            }
+                            i = end + 2
+                        } else {
+                            append("**")
+                            i += 2
+                        }
+                    }
+                    remainingLine.startsWith("*", i) -> {
+                        val end = remainingLine.indexOf("*", i + 1)
+                        if (end != -1) {
+                            withStyle(style = SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                                append(remainingLine.substring(i + 1, end))
+                            }
+                            i = end + 1
+                        } else {
+                            append("*")
+                            i += 1
+                        }
+                    }
+                    else -> {
+                        append(remainingLine[i])
+                        i++
+                    }
+                }
+            }
+            
+            if (index < lines.size - 1) {
+                append("\n")
+            }
+        }
+    }
+}
+

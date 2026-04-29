@@ -1697,16 +1697,27 @@ fun InstitutionTransportStep(
             Spacer(modifier = Modifier.height(16.dp))
             Text("Fuel Type", style = MaterialTheme.typography.labelLarge)
             val fuels = listOf(FuelType.DIESEL, FuelType.CNG, FuelType.ELECTRIC, FuelType.PETROL)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 fuels.forEach { f ->
                     FilterChip(
                         selected = localBusFuelType == f,
                         onClick = { localBusFuelType = f },
-                        label = { Text(f.name, style = MaterialTheme.typography.bodySmall) },
-                        modifier = Modifier.weight(1f)
+                        label = { 
+                            Text(
+                                text = f.name.lowercase().replaceFirstChar { it.uppercase() }, 
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1
+                            ) 
+                        },
                     )
                 }
             }
+
         }
     }
 }
@@ -1758,16 +1769,27 @@ fun InstitutionCanteenWasteStep(
             Spacer(modifier = Modifier.height(16.dp))
             Text("Cooking fuel type", style = MaterialTheme.typography.labelLarge)
             val fuels = listOf(CanteenFuel.LPG, CanteenFuel.PNG, CanteenFuel.ELECTRIC, CanteenFuel.MIXED)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 fuels.forEach { f ->
                     FilterChip(
                         selected = localCanteenFuel == f,
                         onClick = { localCanteenFuel = f },
-                        label = { Text(f.name, style = MaterialTheme.typography.bodySmall) },
-                        modifier = Modifier.weight(1f)
+                        label = { 
+                            Text(
+                                text = f.name.lowercase().replaceFirstChar { it.uppercase() }, 
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1
+                            ) 
+                        },
                     )
                 }
             }
+
 
             if (localCanteenFuel == CanteenFuel.LPG || localCanteenFuel == CanteenFuel.MIXED) {
                 Spacer(modifier = Modifier.height(16.dp))

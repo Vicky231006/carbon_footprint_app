@@ -285,41 +285,44 @@ fun HistoryScreen(
         }
 
 
-        items(filteredTransport) { segment ->
-            HistoryItem(
-                title = "Transport: ${segment.transportMode}",
-                value = "${String.format(Locale.getDefault(), "%.2f", segment.co2Kg)} kg",
-                date = dateFormat.format(Date(segment.date)),
-                subtitle = "${String.format(Locale.getDefault(), "%.1f", segment.estimatedKm)} km traveled"
-            )
+        if (!state.isInstitution) {
+            items(filteredTransport) { segment ->
+                HistoryItem(
+                    title = "Transport: ${segment.transportMode}",
+                    value = "${String.format(Locale.getDefault(), "%.2f", segment.co2Kg)} kg",
+                    date = dateFormat.format(Date(segment.date)),
+                    subtitle = "${String.format(Locale.getDefault(), "%.1f", segment.estimatedKm)} km traveled"
+                )
+            }
+
+            items(filteredFood) { log ->
+                HistoryItem(
+                    title = "Food: ${log.mealType}",
+                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                    date = dateFormat.format(Date(log.date)),
+                    subtitle = log.description
+                )
+            }
+
+            items(filteredDigital) { log ->
+                HistoryItem(
+                    title = "Digital Activity",
+                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                    date = dateFormat.format(Date(log.date)),
+                    subtitle = "${log.screenTimeMinutes} minutes screen time"
+                )
+            }
+
+            items(filteredEnergy) { log ->
+                HistoryItem(
+                    title = "Energy: ${log.energyType}",
+                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                    date = dateFormat.format(Date(log.date)),
+                    subtitle = log.value.toString()
+                )
+            }
         }
 
-        items(filteredFood) { log ->
-            HistoryItem(
-                title = "Food: ${log.mealType}",
-                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                date = dateFormat.format(Date(log.date)),
-                subtitle = log.description
-            )
-        }
-
-        items(filteredDigital) { log ->
-            HistoryItem(
-                title = "Digital Activity",
-                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                date = dateFormat.format(Date(log.date)),
-                subtitle = "${log.screenTimeMinutes} minutes screen time"
-            )
-        }
-
-        items(filteredEnergy) { log ->
-            HistoryItem(
-                title = "Energy: ${log.energyType}",
-                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                date = dateFormat.format(Date(log.date)),
-                subtitle = log.value.toString()
-            )
-        }
     }
 }
 

@@ -75,7 +75,8 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("The Carbon Project") },
+                title = { Text("GreenView") },
+
                 actions = {
                     IconButton(onClick = onNavigateToProfile) {
                         Icon(
@@ -153,29 +154,67 @@ fun DashboardScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            val indiaAvg = 9.58 // kg per day benchmark
-                            val diff = totalCo2Today - indiaAvg
-                            val color = if (diff <= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
-                            val text = if (diff <= 0) 
-                                "${String.format(Locale.getDefault(), "%.1f", -diff)} kg lower than India avg" 
-                                else "${String.format(Locale.getDefault(), "%.1f", diff)} kg higher than India avg"
-                            
-                            Icon(
-                                if (diff <= 0) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                                null,
-                                tint = color,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+                            if (isInstitution) {
+                                val perCapita = if (studentStaffCount > 0) totalCo2Today / studentStaffCount else 0.0
+                                val benchmark = 0.88 // kg per day per person benchmark for Indian institutions
+                                val diff = perCapita - benchmark
+                                val color = if (diff <= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (diff <= 0) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                            null,
+                                            tint = color,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            if (diff <= 0) "${String.format(Locale.getDefault(), "%.2f", -diff)} kg lower than benchmark"
+                                            else "${String.format(Locale.getDefault(), "%.2f", diff)} kg higher than benchmark",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = color
+                                        )
+                                    }
+                                    Text(
+                                        "Per Capita: ${String.format(Locale.getDefault(), "%.2f", perCapita)} kg/day (Benchmark: $benchmark kg)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        "Source: Academic research on Indian campuses",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                            } else {
+                                val indiaAvg = 9.58 // kg per day benchmark for metro city individual
+                                val diff = totalCo2Today - indiaAvg
+                                val color = if (diff <= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                val text = if (diff <= 0) 
+                                    "${String.format(Locale.getDefault(), "%.1f", -diff)} kg lower than India avg" 
+                                    else "${String.format(Locale.getDefault(), "%.1f", diff)} kg higher than India avg"
+                                
+                                Icon(
+                                    if (diff <= 0) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                                    null,
+                                    tint = color,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+                            }
                         }
                     }
                 }
+
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 if (isInstitution) {
+                    val instProfile by viewModel.institutionProfile.collectAsState()
                     InstitutionDashboardContent(
+                        profile = instProfile,
                         energyKg = energyCo2Today,
                         transportKg = transportCo2Today,
                         foodKg = foodCo2Today,

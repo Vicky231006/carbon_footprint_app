@@ -16,8 +16,12 @@ data class CommunityUiState(
     val leaderboard: List<LeaderboardEntry> = emptyList(),
     val isLoading: Boolean = true,
     val error: String? = null,
-    val userState: String = "Global"
+    val userState: String = "Global",
+    val isInstitution: Boolean = false,
+    val institutionName: String? = null
 )
+
+
 
 @HiltViewModel
 class CommunityViewModel @Inject constructor(
@@ -34,9 +38,17 @@ class CommunityViewModel @Inject constructor(
 
     fun fetchLeaderboard() {
         val prefs = context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE)
+        val userType = prefs.getString("user_type", "INDIVIDUAL")
+        val isInst = userType == "INSTITUTION"
         val userState = prefs.getString("user_state", "Maharashtra") ?: "Maharashtra"
+        val instName = prefs.getString("institution_name", "Our Institution")
 
-        _uiState.value = _uiState.value.copy(isLoading = true, userState = userState)
+        _uiState.value = _uiState.value.copy(
+            isLoading = true, 
+            userState = userState,
+            isInstitution = isInst,
+            institutionName = instName
+        )
         
         viewModelScope.launch {
             try {
@@ -60,5 +72,7 @@ class CommunityViewModel @Inject constructor(
                 )
             }
         }
+
     }
 }
+

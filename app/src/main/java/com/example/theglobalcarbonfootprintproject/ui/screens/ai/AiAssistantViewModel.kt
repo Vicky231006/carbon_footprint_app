@@ -30,8 +30,10 @@ data class ChatMessage(
 
 @HiltViewModel
 class AiAssistantViewModel @Inject constructor(
-    private val carbonDao: CarbonDao
+    private val carbonDao: CarbonDao,
+    private val sharedPreferences: android.content.SharedPreferences
 ) : ViewModel() {
+
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -84,11 +86,20 @@ class AiAssistantViewModel @Inject constructor(
             )
 
             // Verify Gemini API connection
-            chatContext = "You are a highly helpful Carbon Footprint Assistant for an Indian user. The user's name is $name. " +
-                    "Provide practical, encouraging, and specific advice on reducing carbon footprint. " +
-                    "Focus on Indian context: public transport like metros and buses, seasonal electricity with ACs, " +
-                    "vegetarian vs non-vegetarian diets, and digital footprint from streaming. " +
-                    "Keep responses concise (2-3 paragraphs max)."
+            val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
+            chatContext = if (isInst) {
+                "You are a specialized Institutional Carbon Consultant for an Indian campus/organization. " +
+                "Provide strategic, data-driven advice on reducing the carbon footprint of large facilities. " +
+                "Focus on: HVAC optimization, solar transition, large-scale waste management (biogas/composting), " +
+                "and sustainable procurement. Keep responses professional and actionable for campus administrators."
+            } else {
+                "You are a highly helpful Carbon Footprint Assistant for an Indian user. The user's name is $name. " +
+                "Provide practical, encouraging, and specific advice on reducing carbon footprint. " +
+                "Focus on Indian context: public transport like metros and buses, seasonal electricity with ACs, " +
+                "vegetarian vs non-vegetarian diets, and digital footprint from streaming. " +
+                "Keep responses concise (2-3 paragraphs max)."
+            }
+
 
             val apiKey = BuildConfig.GEMINI_API_KEY
             if (apiKey.isNotBlank()) {
@@ -98,6 +109,8 @@ class AiAssistantViewModel @Inject constructor(
                         apiKey = apiKey,
                         systemInstruction = content { text(chatContext) }
                     )
+
+
                     // Verify connection with a quick test
                     val testResponse = generativeModel!!.generateContent("Say 'connected' in one word")
                     if (testResponse.text != null) {
@@ -116,28 +129,37 @@ class AiAssistantViewModel @Inject constructor(
     }
 
     private fun buildSuggestions(profile: com.example.theglobalcarbonfootprintproject.data.local.entities.UserProfile?): List<String> {
+        val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
         val suggestions = mutableListOf<String>()
 
-        // 1. Transport — based on mode
-        val mode = profile?.travelMode?.uppercase() ?: "CAR"
-        suggestions.add(when (mode) {
-            "CAR", "TWO_WHEELER" -> "What are the best public transport alternatives to reduce emissions?"
-            "METRO", "BUS", "PUBLIC_TRANSPORT" -> "How much CO₂ am I saving by using public transport?"
-            "WALK_BIKE" -> "What other eco-friendly habits can complement my walking lifestyle?"
-            else -> "How can I make my daily commute more eco-friendly?"
-        })
+        if (isInst) {
+            suggestions.add("How can our institution transition to 100% renewable energy?")
+            suggestions.add("What are the best waste management practices for large campus canteens?")
+            suggestions.add("How does improving building insulation affect our carbon footprint?")
+            suggestions.add("Propose a green commuting policy for students and staff.")
+        } else {
+            // 1. Transport — based on mode
+            val mode = profile?.travelMode?.uppercase() ?: "CAR"
+            suggestions.add(when (mode) {
+                "CAR", "TWO_WHEELER" -> "What are the best public transport alternatives to reduce emissions?"
+                "METRO", "BUS", "PUBLIC_TRANSPORT" -> "How much CO₂ am I saving by using public transport?"
+                "WALK_BIKE" -> "What other eco-friendly habits can complement my walking lifestyle?"
+                else -> "How can I make my daily commute more eco-friendly?"
+            })
 
-        // 2. General eco tip (kept generic per user feedback)
-        suggestions.add("What are the top 5 easy ways to reduce my carbon footprint at home?")
+            // 2. General eco tip (kept generic per user feedback)
+            suggestions.add("What are the top 5 easy ways to reduce my carbon footprint at home?")
 
-        // 3. Seasonal/general energy tip (generic, not targeted)
-        suggestions.add("How does seasonal weather affect household energy consumption in India?")
+            // 3. Seasonal/general energy tip (generic, not targeted)
+            suggestions.add("How does seasonal weather affect household energy consumption in India?")
 
-        // 4. Lifestyle/awareness
-        suggestions.add("How does my digital screen time contribute to carbon emissions?")
+            // 4. Lifestyle/awareness
+            suggestions.add("How does my digital screen time contribute to carbon emissions?")
+        }
 
         return suggestions
     }
+
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
@@ -157,19 +179,33 @@ class AiAssistantViewModel @Inject constructor(
                     updatedMessages.add(ChatMessage(aiResponse, false))
                     _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
                 } catch (e: Exception) {
-                    Log.e("AiAssistant", "Gemini error: ${e.message}")
-                    val fallbackTip = FallbackAdviceEngine.getAdvice(UserType.INDIVIDUAL)
+                    val errorMsg = e.message ?: "Unknown error"
+                    Log.e("AiAssistant", "Gemini error: $errorMsg")
+                    
+                    if (errorMsg.contains("429") || errorMsg.contains("Quota")) {
+                        Log.w("AiAssistant", "Rate limit hit! Switching to offline mode temporarily.")
+                    }
+
+                    val hardcoded = FallbackAdviceEngine.getHardcodedAnswer(text)
+
+                    val userType = if (sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION") UserType.INSTITUTION else UserType.INDIVIDUAL
+                    val fallbackTip = hardcoded ?: FallbackAdviceEngine.getAdvice(userType)
+                    
                     val updatedMessages = _uiState.value.messages.toMutableList()
                     updatedMessages.add(ChatMessage("[Offline] $fallbackTip", false))
                     _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
                 }
             } else {
                 // Offline fallback
-                val fallbackTip = FallbackAdviceEngine.getAdvice(UserType.INDIVIDUAL)
+                val hardcoded = FallbackAdviceEngine.getHardcodedAnswer(text)
+                val userType = if (sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION") UserType.INSTITUTION else UserType.INDIVIDUAL
+                val fallbackTip = hardcoded ?: FallbackAdviceEngine.getAdvice(userType)
+                
                 val updatedMessages = _uiState.value.messages.toMutableList()
                 updatedMessages.add(ChatMessage("[Offline] $fallbackTip", false))
                 _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
             }
         }
+
     }
 }
