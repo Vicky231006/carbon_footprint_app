@@ -8,5 +8,6 @@ data class DigitalLog(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val date: Long,
     val screenTimeMinutes: Long,
+    val systemTimeMinutes: Long = 0,
     val co2Kg: Double
 )

@@ -9,8 +9,9 @@ object SeasonalElectricityCalculator {
     // Monsoon (moderate): July–Sept    → months 7,8,9
     // Winter (low AC, maybe heater): Oct–Feb → months 10,11,12,1,2
 
-    fun getMonthlyKwh(baseKwh: Double, seasonality: ACSeasonality, month: Int = getCurrentMonth()): Double {
-        val multiplier = when (seasonality) {
+    fun getMonthlyKwh(baseKwh: Double, seasonality: ACSeasonality?, month: Int = getCurrentMonth()): Double {
+        val s = seasonality ?: ACSeasonality.NONE
+        val multiplier = when (s) {
             ACSeasonality.NONE -> 1.0
             ACSeasonality.SEASONAL -> when (month) {
                 in 3..6 -> 1.45   // summer — AC heavy
@@ -26,7 +27,7 @@ object SeasonalElectricityCalculator {
         return baseKwh * multiplier
     }
 
-    fun getDailyKwh(baseKwh: Double, seasonality: ACSeasonality, month: Int = getCurrentMonth()): Double {
+    fun getDailyKwh(baseKwh: Double, seasonality: ACSeasonality?, month: Int = getCurrentMonth()): Double {
         val cal = Calendar.getInstance()
         if (month != getCurrentMonth()) {
             cal.set(Calendar.MONTH, month - 1)
@@ -35,9 +36,10 @@ object SeasonalElectricityCalculator {
         return getMonthlyKwh(baseKwh, seasonality, month) / daysInMonth
     }
 
-    fun getDailyCo2(baseKwh: Double, seasonality: ACSeasonality, gridFactor: Double, month: Int = getCurrentMonth()): Double {
+    fun getDailyCo2(baseKwh: Double, seasonality: ACSeasonality?, gridFactor: Double, month: Int = getCurrentMonth()): Double {
         return getDailyKwh(baseKwh, seasonality, month) * gridFactor
     }
+
 
     fun getSeasonLabel(month: Int = getCurrentMonth()): String {
         return when (month) {

@@ -15,6 +15,14 @@ interface DigitalLogDao {
     @Query("SELECT MAX(co2Kg) FROM digital_logs WHERE date >= :startOfDay")
     fun getTodayDigitalCo2(startOfDay: Long): Flow<Double?>
 
+    @Query("SELECT MAX(screenTimeMinutes) FROM digital_logs WHERE date >= :startOfDay")
+    fun getTodayDigitalMinutes(startOfDay: Long): Flow<Long?>
+
+    @Query("SELECT MAX(systemTimeMinutes) FROM digital_logs WHERE date >= :startOfDay")
+    fun getTodaySystemMinutes(startOfDay: Long): Flow<Long?>
+
+
+
     @Query("SELECT * FROM digital_logs ORDER BY date DESC")
     fun getAllHistory(): Flow<List<DigitalLog>>
 }

@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Restaurant
+
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -52,7 +55,62 @@ fun LogActivityScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
+                // --- AI Quick Log Section ---
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F8E9)),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(androidx.compose.material.icons.Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF2E7D32))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("AI Quick Log", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        }
+                        Text("Just type what you did (e.g., 'burger' or 'metro')", style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        var nlpInput by remember { mutableStateOf("") }
+                        val nlpLoading by viewModel.nlpLoading.collectAsState()
+                        val nlpResult by viewModel.nlpResult.collectAsState()
+                        
+                        OutlinedTextField(
+                            value = nlpInput,
+                            onValueChange = { nlpInput = it },
+                            placeholder = { Text("Log with AI...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingIcon = {
+                                if (nlpLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF2E7D32), strokeWidth = 2.dp)
+                                } else {
+                                    IconButton(onClick = { 
+                                        viewModel.processNlpInput(nlpInput)
+                                        nlpInput = ""
+                                    }) {
+                                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send, contentDescription = "Log", tint = Color(0xFF2E7D32))
+                                    }
+                                }
+                            },
+                            singleLine = true
+                        )
+                        
+                        nlpResult?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (it.startsWith("Success")) Color(0xFF2E7D32) else Color.Red,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            LaunchedEffect(it) {
+                                kotlinx.coroutines.delay(3000)
+                                viewModel.clearNlpResult()
+                            }
+                        }
+                    }
+                }
+
                 if (selectedTab == 0) {
+
                     FoodLogSection(onLog = { meal, desc -> 
                         viewModel.logFood(meal, desc)
                         onBack()

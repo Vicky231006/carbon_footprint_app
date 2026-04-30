@@ -35,21 +35,45 @@ class AuthViewModel @Inject constructor(
             try {
                 val response = apiService.loginUser(LoginRequest(email, pass))
                 if (response.success && response.user != null) {
+                    val userId = response.userId ?: "unknown"
+                    
                     // Populate local database with retrieved user
                     carbonDao.insertUserProfile(response.user)
                     
+                    // Handle Institution data if present
+                    response.institution?.let { 
+                        carbonDao.insertInstitutionProfile(it)
+                    }
+
+                    val userType = if (response.institution != null) "INSTITUTION" else response.user.userType
+
                     prefs.edit()
                         .putBoolean("onboarding_complete", response.user.onboardingComplete)
-                        .putString("user_id", response.userId ?: "unknown")
+                        .putString("user_id", userId)
                         .putFloat("baseline_co2_daily", response.user.baseline_co2_daily.toFloat())
-                        .putString("user_type", response.user.userType)
+                        .putString("user_type", userType)
                         .putString("user_name", response.user.name)
                         .putString("user_state", response.user.state)
                         .putFloat("grid_factor", response.user.gridFactor.toFloat())
                         .apply()
 
+
+                    // Trigger a pull of historical logs from MongoDB
+                    viewModelScope.launch {
+                        try {
+                            val logsResponse = apiService.getLogs(userId)
+                            if (logsResponse.success && logsResponse.logs != null) {
+                                logsResponse.logs.forEach { log ->
+                                    carbonDao.insertLog(log)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Silent failure for logs pull
+                        }
+                    }
                         
                     _uiState.value = AuthUiState(isLoggedIn = true)
+
                 } else {
                     _uiState.value = AuthUiState(error = response.error ?: "Invalid credentials")
                 }

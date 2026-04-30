@@ -230,7 +230,55 @@ fun DashboardScreen(
                         modifier = Modifier.align(Alignment.Start)
                     )
 
+                    
+                    val hasTraveled by viewModel.hasTraveledToday.collectAsState()
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (hasTraveled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else Color(0xFFFFF3E0)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(
+                                    if (hasTraveled) Icons.Default.DirectionsCar else Icons.Default.DirectionsOff,
+                                    contentDescription = null,
+                                    tint = if (hasTraveled) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Did you travel today?",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (hasTraveled) "Tracking commute impact" else "Travel impact set to 0 kg",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = hasTraveled,
+                                onCheckedChange = { viewModel.setHasTraveledToday(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFF2E7D32),
+                                    checkedTrackColor = Color(0xFFE8F5E9)
+                                )
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
+
 
                     if (unverifiedSegments.isNotEmpty()) {
                         DisambiguationCard(unverifiedSegments.first()) { id, mode ->
@@ -275,7 +323,37 @@ fun DashboardScreen(
 
 
 
+                    val hasUsagePermission by viewModel.hasUsageStatsPermission.collectAsState()
+                    if (!hasUsagePermission && !isInstitution) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Timer, null, tint = MaterialTheme.colorScheme.tertiary)
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Actual Screen Time", fontWeight = FontWeight.Bold)
+                                    Text("Enable usage access for live digital footprint", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(
+                                    onClick = {
+                                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                                ) {
+                                    Text("Enable", color = Color.White)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     var expandedCategory by remember { mutableStateOf<String?>(null) }
+
 
                     val transportKm by viewModel.transportKmToday.collectAsState()
                     val profile by viewModel.individualProfile.collectAsState()
@@ -385,7 +463,8 @@ fun DashboardScreen(
                         )
                     }
 
-                    // ─── Digital Row ───
+                    val digitalMinutes by viewModel.digitalMinutesToday.collectAsState()
+                    val systemMinutes by viewModel.systemMinutesToday.collectAsState()
                     DashboardCategoryRow("Digital", digitalCo2Today, Icons.Default.Smartphone,
                         expanded = expandedCategory == "digital",
                         onClick = { expandedCategory = if (expandedCategory == "digital") null else "digital" }
@@ -395,16 +474,23 @@ fun DashboardScreen(
                         enter = expandVertically(),
                         exit = shrinkVertically()
                     ) {
+                        val totalMins = digitalMinutes + systemMinutes
+                        val hours = totalMins / 60
+                        val mins = totalMins % 60
+                        
                         BreakdownCard(
                             title = "How we calculated Digital",
                             lines = listOf(
-                                "Source: Actual screen time tracked by your phone",
-                                "We measure your total app usage today",
-                                "Rate: ~0.036 kg CO₂ per hour of screen time",
-                                "Your total today: ${String.format(Locale.US, "%.1f", digitalCo2Today)} kg CO₂"
+                                "Source: Total phone activity (Interactive + System)",
+                                "Total Device Usage: ${hours}h ${mins}m",
+                                "Rate: ~0.036 kg CO₂ per hour of activity",
+                                "Your total today: ${String.format(Locale.US, "%.2f", digitalCo2Today)} kg CO₂"
                             )
                         )
+
                     }
+
+
 
 
 

@@ -58,27 +58,42 @@ fun HistoryScreen(
     // This handles the case where the app just opened and saved a 0-snapshot before profile loaded.
     val isToday = isSameDay(System.currentTimeMillis())
     
-    val dayTransportTotal = if (dayLogs.isNotEmpty()) {
-        val fromSnapshot = dayLogs.maxByOrNull { it.date }?.transportKg ?: 0.0
-        if (isToday && fromSnapshot == 0.0) filteredTransport.sumOf { it.co2Kg } else fromSnapshot
-    } else filteredTransport.sumOf { it.co2Kg }
+    // For institutions, calculate the daily breakdown once
+    val instResult = state.institutionProfile?.let { com.example.theglobalcarbonfootprintproject.calculator.InstitutionCarbonEngine.calculateDailyTotal(it) }
 
-    val dayFoodTotal = if (dayLogs.isNotEmpty()) {
-        val fromSnapshot = dayLogs.maxByOrNull { it.date }?.foodKg ?: 0.0
-        if (isToday && fromSnapshot == 0.0) filteredFood.sumOf { it.co2Kg } else fromSnapshot
-    } else filteredFood.sumOf { it.co2Kg }
+    val dayTransportTotal = if (state.isInstitution) instResult?.transportKg ?: 0.0 else {
+        if (dayLogs.isNotEmpty()) {
+            val fromSnapshot = dayLogs.maxByOrNull { it.date }?.transportKg ?: 0.0
+            if (isToday && fromSnapshot == 0.0) filteredTransport.sumOf { it.co2Kg } else fromSnapshot
+        } else filteredTransport.sumOf { it.co2Kg }
+    }
 
-    val dayEnergyTotal = if (dayLogs.isNotEmpty()) {
-        val fromSnapshot = dayLogs.maxByOrNull { it.date }?.electricityKg ?: 0.0
-        if (isToday && fromSnapshot == 0.0) filteredEnergy.sumOf { it.co2Kg } else fromSnapshot
-    } else filteredEnergy.sumOf { it.co2Kg }
+    val dayFoodTotal = if (state.isInstitution) instResult?.foodKg ?: 0.0 else {
+        if (dayLogs.isNotEmpty()) {
+            val fromSnapshot = dayLogs.maxByOrNull { it.date }?.foodKg ?: 0.0
+            if (isToday && fromSnapshot == 0.0) filteredFood.sumOf { it.co2Kg } else fromSnapshot
+        } else filteredFood.sumOf { it.co2Kg }
+    }
 
-    val dayDigitalTotal = if (dayLogs.isNotEmpty()) {
-        val fromSnapshot = dayLogs.maxByOrNull { it.date }?.digitalKg ?: 0.0
-        if (isToday && fromSnapshot == 0.0) filteredDigital.maxByOrNull { it.date }?.co2Kg ?: 0.0 else fromSnapshot
-    } else filteredDigital.maxByOrNull { it.date }?.co2Kg ?: 0.0
+    val dayEnergyTotal = if (state.isInstitution) instResult?.energyKg ?: 0.0 else {
+        if (dayLogs.isNotEmpty()) {
+            val fromSnapshot = dayLogs.maxByOrNull { it.date }?.electricityKg ?: 0.0
+            if (isToday && fromSnapshot == 0.0) filteredEnergy.sumOf { it.co2Kg } else fromSnapshot
+        } else filteredEnergy.sumOf { it.co2Kg }
+    }
 
-    val dayTotal = dayTransportTotal + dayFoodTotal + dayEnergyTotal + dayDigitalTotal
+    val dayDigitalTotal = if (state.isInstitution) 0.0 else {
+        if (dayLogs.isNotEmpty()) {
+            val fromSnapshot = dayLogs.maxByOrNull { it.date }?.digitalKg ?: 0.0
+            if (isToday && fromSnapshot == 0.0) filteredDigital.maxByOrNull { it.date }?.co2Kg ?: 0.0 else fromSnapshot
+        } else filteredDigital.maxByOrNull { it.date }?.co2Kg ?: 0.0
+    }
+
+    val dayWasteTotal = if (state.isInstitution) instResult?.wasteKg ?: 0.0 else 0.0
+    val dayEventTotal = if (state.isInstitution) instResult?.eventKg ?: 0.0 else 0.0
+
+    val dayTotal = dayTransportTotal + dayFoodTotal + dayEnergyTotal + dayDigitalTotal + dayWasteTotal + dayEventTotal
+
 
 
     LazyColumn(
@@ -111,7 +126,21 @@ fun HistoryScreen(
                         val c2 = Calendar.getInstance().apply { timeInMillis = dayMs }
                         c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
                     }
-                    val dayTotalKg = calDayLogs.maxByOrNull { it.date }?.totalKg ?: 0.0
+                    val fromSnapshot = calDayLogs.maxByOrNull { it.date }?.totalKg ?: 0.0
+                    
+                    val dayTotalKg = if (fromSnapshot > 0) fromSnapshot else {
+                        val cal = Calendar.getInstance().apply { timeInMillis = dayMs }
+                        val start = cal.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+                        val end = start + 86400000
+                        val isDayMatch = { time: Long -> time in start until end }
+                        
+                        val food = state.foodHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                        val trans = state.transportHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                        val energy = state.energyHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                        val digital = state.digitalHistory.filter { isDayMatch(it.date) }.maxByOrNull { it.date }?.co2Kg ?: 0.0
+                        food + trans + energy + digital
+                    }
+
 
 
                     Card(
@@ -158,12 +187,23 @@ fun HistoryScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (dayTotal > 0) {
-                val slices = listOf(
-                    PieSlice("Transport", dayTransportTotal, Color(0xFF1565C0)),
-                    PieSlice("Food", dayFoodTotal, Color(0xFF2E7D32)),
-                    PieSlice("Energy", dayEnergyTotal, Color(0xFFFBC02D)),
-                    PieSlice("Digital", dayDigitalTotal, Color(0xFF7B1FA2))
-                ).filter { it.value > 0 }
+                val slices = if (state.isInstitution) {
+                    listOf(
+                        PieSlice("Energy", dayEnergyTotal, Color(0xFFFBC02D)),
+                        PieSlice("Transport", dayTransportTotal, Color(0xFF1565C0)),
+                        PieSlice("Food", dayFoodTotal, Color(0xFF2E7D32)),
+                        PieSlice("Waste", dayWasteTotal, Color(0xFF795548)),
+                        PieSlice("Events", dayEventTotal, Color(0xFFE91E63))
+                    )
+                } else {
+                    listOf(
+                        PieSlice("Transport", dayTransportTotal, Color(0xFF1565C0)),
+                        PieSlice("Food", dayFoodTotal, Color(0xFF2E7D32)),
+                        PieSlice("Energy", dayEnergyTotal, Color(0xFFFBC02D)),
+                        PieSlice("Digital", dayDigitalTotal, Color(0xFF7B1FA2))
+                    )
+                }.filter { it.value > 0 }
+
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -214,17 +254,35 @@ fun HistoryScreen(
 
             val weekData = (0..6).map { offset ->
                 val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -offset) }
-                val logsForDay = state.dailyAggregates.filter {
-                    val c1 = Calendar.getInstance().apply { timeInMillis = it.date }
-                    c1.get(Calendar.YEAR) == cal.get(Calendar.YEAR) && c1.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR)
-                }
-                // Use the LATEST log for the day (not sum, to avoid duplicates)
+                val start = cal.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+                val end = start + 86400000
+                
+                val isDayMatch = { time: Long -> time in start until end }
+                
+                val logsForDay = state.dailyAggregates.filter { isDayMatch(it.date) }
                 val latestLog = logsForDay.maxByOrNull { it.date }
+                
+                val value = if (state.isInstitution) {
+                    val logVal = logsForDay.maxByOrNull { it.date }?.totalKg ?: 0.0
+                    if (logVal > 0) logVal else (instResult?.totalKg ?: 0.0)
+                } else if (latestLog != null && latestLog.totalKg > 0) {
+                    latestLog.totalKg
+                } else {
+                    // Fallback to manual logs
+                    val food = state.foodHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                    val trans = state.transportHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                    val energy = state.energyHistory.filter { isDayMatch(it.date) }.sumOf { it.co2Kg }
+                    val digital = state.digitalHistory.filter { isDayMatch(it.date) }.maxByOrNull { it.date }?.co2Kg ?: 0.0
+                    food + trans + energy + digital
+                }
+
+
                 BarData(
                     label = SimpleDateFormat("EEE", Locale.getDefault()).format(cal.time),
-                    value = latestLog?.totalKg ?: 0.0
+                    value = value
                 )
             }.reversed()
+
 
 
             val maxVal = (weekData.maxOfOrNull { it.value } ?: 1.0).coerceAtLeast(1.0)

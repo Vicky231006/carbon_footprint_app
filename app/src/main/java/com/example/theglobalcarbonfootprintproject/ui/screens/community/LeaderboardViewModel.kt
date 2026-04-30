@@ -29,12 +29,13 @@ class LeaderboardViewModel @Inject constructor(
         .map { points ->
             val userPoints = points ?: 0
             val mockUsers = listOf(
-                LeaderboardEntry("EcoWarrior_42", 12500, 1),
-                LeaderboardEntry("GreenLeaf", 11200, 2),
-                LeaderboardEntry("SolarPioneer", 9800, 3),
-                LeaderboardEntry("CarbonNeutral", 8500, 4),
-                LeaderboardEntry("You", userPoints, 5)
+                LeaderboardEntry("Aditya Kulkarni", userPoints + 1200, 1),
+                LeaderboardEntry("Vicky (You)", userPoints, 2),
+                LeaderboardEntry("Snehal Patil", (userPoints * 0.85).toInt(), 3),
+                LeaderboardEntry("Rahul Deshmukh", (userPoints * 0.70).toInt(), 4),
+                LeaderboardEntry("Anjali Joshi", (userPoints * 0.55).toInt(), 5)
             ).sortedByDescending { it.points }
+
             
             // Re-rank based on points
             val rankedUsers = mockUsers.mapIndexed { index, entry ->
@@ -43,6 +44,7 @@ class LeaderboardViewModel @Inject constructor(
             
             LeaderboardUiState(rankedUsers)
         }
+
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

@@ -18,8 +18,10 @@ data class HistoryUiState(
     val energyHistory: List<EnergyLog> = emptyList(),
     val digitalHistory: List<com.example.theglobalcarbonfootprintproject.data.local.entities.DigitalLog> = emptyList(),
     val dailyAggregates: List<CarbonLog> = emptyList(),
-    val isInstitution: Boolean = false
+    val isInstitution: Boolean = false,
+    val institutionProfile: com.example.theglobalcarbonfootprintproject.data.local.entities.InstitutionProfile? = null
 )
+
 
 
 
@@ -34,33 +36,40 @@ class HistoryViewModel @Inject constructor(
     private val sharedPreferences: android.content.SharedPreferences
 ) : ViewModel() {
 
-    private val isInstitutionFlow = kotlinx.coroutines.flow.flow {
-        val type = sharedPreferences.getString("user_type", "INDIVIDUAL")
-        emit(type == "INSTITUTION")
-    }
+
 
     val uiState: StateFlow<HistoryUiState> = combine(
         repository.getAllTransportHistory(),
         repository.getAllFoodHistory(),
         repository.getAllEnergyHistory(),
         repository.getAllDigitalHistory(),
-        repository.getAllLogs()
-    ) { transport, food, energy, digital, logs ->
+        repository.getAllLogs(),
+        repository.getInstitutionProfile()
+    ) { args ->
+        val transport = args[0] as List<com.example.theglobalcarbonfootprintproject.data.local.entities.TransportSegment>
+        val food = args[1] as List<com.example.theglobalcarbonfootprintproject.data.local.entities.FoodLog>
+        val energy = args[2] as List<com.example.theglobalcarbonfootprintproject.data.local.entities.EnergyLog>
+        val digital = args[3] as List<com.example.theglobalcarbonfootprintproject.data.local.entities.DigitalLog>
+        val logs = args[4] as List<com.example.theglobalcarbonfootprintproject.data.local.entities.CarbonLog>
+        val instProfile = args[5] as com.example.theglobalcarbonfootprintproject.data.local.entities.InstitutionProfile?
+
+        val type = sharedPreferences.getString("user_type", "INDIVIDUAL")
         HistoryUiState(
             transportHistory = transport,
             foodHistory = food,
             energyHistory = energy,
             digitalHistory = digital,
-            dailyAggregates = logs.sortedByDescending { it.date }
+            dailyAggregates = logs.sortedByDescending { it.date },
+            isInstitution = type == "INSTITUTION",
+            institutionProfile = instProfile
         )
-    }.combine(isInstitutionFlow) { state, isInst ->
-        state.copy(isInstitution = isInst)
-    }
-    .stateIn(
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = HistoryUiState()
     )
+
+
 }
 
 

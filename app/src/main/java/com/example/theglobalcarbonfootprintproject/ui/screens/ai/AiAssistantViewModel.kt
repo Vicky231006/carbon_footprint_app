@@ -75,8 +75,17 @@ class AiAssistantViewModel @Inject constructor(
             // Generate 4 generic suggestion chips (not targeted per user feedback)
             val suggestions = buildSuggestions(userProfile)
 
-            val tipText = tips.joinToString("\n- ")
-            val welcomeMessage = "Hello $name! Here are some personalized tips based on your profile:\n- $tipText\n\nTap a suggestion below or ask me anything!"
+            val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
+            val welcomeMessage = if (isInst) {
+                val instProfile = carbonDao.getInstitutionProfile().first()
+                val instName = instProfile?.name ?: "our Institution"
+                val solarText = if ((instProfile?.solarCapacityKw ?: 0.0) > 0) "Your ${instProfile?.solarCapacityKw}kW solar setup is fantastic!" else "Have you considered solar power for the campus?"
+                "Hello $instName! I am your Campus Sustainability Consultant. $solarText Currently, your daily energy footprint is approximately ${String.format(java.util.Locale.getDefault(), "%.1f", instProfile?.monthlyEnergyKwh?.div(30.0) ?: 0.0)} kWh. How can I help you optimize today?"
+            } else {
+                val tipText = tips.joinToString("\n- ")
+                "Hello $name! Here are some personalized tips based on your profile:\n- $tipText\n\nTap a suggestion below or ask me anything!"
+            }
+
 
             _uiState.value = AiUiState(
                 messages = listOf(ChatMessage(welcomeMessage, false)),
@@ -86,7 +95,6 @@ class AiAssistantViewModel @Inject constructor(
             )
 
             // Verify Gemini API connection
-            val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
             chatContext = if (isInst) {
                 "You are a specialized Institutional Carbon Consultant for an Indian campus/organization. " +
                 "Provide strategic, data-driven advice on reducing the carbon footprint of large facilities. " +
@@ -105,10 +113,11 @@ class AiAssistantViewModel @Inject constructor(
             if (apiKey.isNotBlank()) {
                 try {
                     generativeModel = GenerativeModel(
-                        modelName = "gemini-2.5-flash",
+                        modelName = "gemini-1.5-flash",
                         apiKey = apiKey,
                         systemInstruction = content { text(chatContext) }
                     )
+
 
 
                     // Verify connection with a quick test

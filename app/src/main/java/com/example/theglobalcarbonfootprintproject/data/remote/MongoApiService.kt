@@ -13,8 +13,10 @@ data class ApiResponse(
     val error: String? = null,
     val userId: String? = null,
     val user: UserProfile? = null,
+    val institution: InstitutionProfile? = null,
     val leaderboard: List<LeaderboardEntry>? = null
 )
+
 
 data class LeaderboardEntry(
     val name: String,

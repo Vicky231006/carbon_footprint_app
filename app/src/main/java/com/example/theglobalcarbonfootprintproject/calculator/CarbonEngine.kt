@@ -35,13 +35,7 @@ object CarbonEngine {
         )
     }
 
-    private fun estimateKwhFromAC(usage: ACUsage): Double = when (usage) {
-        ACUsage.NONE -> 2.0   // kWh/day baseline Indian home
-        ACUsage.OCCASIONAL -> 4.5
-        ACUsage.DAILY -> 9.0
-    }
-
-    private fun calculateTransport(km: Double, mode: TransportMode, fuel: FuelType): Double {
+    fun calculateTransport(km: Double, mode: TransportMode, fuel: FuelType): Double {
         val factor = when (mode) {
             TransportMode.WALK_BIKE -> 0.0
             TransportMode.METRO -> 0.041
@@ -53,13 +47,13 @@ object CarbonEngine {
                 FuelType.ELECTRIC -> 0.053
                 else -> 0.210
             }
-            TransportMode.PUBLIC_TRANSPORT -> 0.065 // Simplified average for generic public transport
-            TransportMode.MIXED -> 0.12 // Average weighted
+            TransportMode.PUBLIC_TRANSPORT -> 0.065
+            TransportMode.MIXED -> 0.12
         }
         return km * factor
     }
 
-    private fun calculateFood(type: DietType, meals: Int): Double {
+    fun calculateFood(type: DietType, meals: Int): Double {
         val factor = when (type) {
             DietType.VEGAN -> 0.50
             DietType.VEGETARIAN -> 0.70
@@ -69,7 +63,7 @@ object CarbonEngine {
         return factor * meals
     }
 
-    private fun calculateDigital(screenCategory: ScreenTime, deviceCount: Int, streamingHeavy: Boolean): Double {
+    fun calculateDigital(screenCategory: ScreenTime, deviceCount: Int, streamingHeavy: Boolean): Double {
         val baseHours = when (screenCategory) {
             ScreenTime.LIGHT -> 1.5
             ScreenTime.MODERATE -> 3.5

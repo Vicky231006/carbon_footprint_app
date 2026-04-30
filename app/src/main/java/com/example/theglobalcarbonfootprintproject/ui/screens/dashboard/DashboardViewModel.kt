@@ -13,8 +13,10 @@ import com.example.theglobalcarbonfootprintproject.calculator.InstitutionCarbonE
 import com.example.theglobalcarbonfootprintproject.calculator.SeasonalElectricityCalculator
 import com.example.theglobalcarbonfootprintproject.calculator.TransportMode as DomainTransportMode
 import com.example.theglobalcarbonfootprintproject.data.local.Converters
+import com.example.theglobalcarbonfootprintproject.data.local.entities.ACSeasonality
 import com.example.theglobalcarbonfootprintproject.data.local.entities.CarbonLog
 import com.example.theglobalcarbonfootprintproject.data.local.entities.InstitutionProfile
+
 import com.example.theglobalcarbonfootprintproject.data.local.entities.TransportSegment
 import com.example.theglobalcarbonfootprintproject.data.remote.DailyLogRequest
 import com.example.theglobalcarbonfootprintproject.data.remote.UserApiService
@@ -43,6 +45,17 @@ class DashboardViewModel @Inject constructor(
     private val healthConnectManager: com.example.theglobalcarbonfootprintproject.data.health.HealthConnectManager
 ) : AndroidViewModel(application), DefaultLifecycleObserver {
 
+    private var generativeModel: com.google.ai.client.generativeai.GenerativeModel? = null
+    private val _nlpLoading = MutableStateFlow(false)
+    val nlpLoading = _nlpLoading.asStateFlow()
+
+    private val _nlpResult = MutableStateFlow<String?>(null)
+    val nlpResult = _nlpResult.asStateFlow()
+
+    private var pollingJob: kotlinx.coroutines.Job? = null
+
+
+
 
 
     private val _todayLog = MutableStateFlow<CarbonLog?>(null)
@@ -58,12 +71,19 @@ class DashboardViewModel @Inject constructor(
     val individualProfile = repository.getUserProfile()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val transportCo2Today: StateFlow<Double> = combine(isInstitution, repository.getTodayTransportCo2(startOfDay()), institutionProfile, individualProfile) {
-        isInst, trackedTransport, instProfile, indProfile ->
+    val hasTraveledToday: StateFlow<Boolean> = sharedPreferences.asFlow()
+        .map { it.getBoolean("has_traveled_today", true) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, sharedPreferences.getBoolean("has_traveled_today", true))
+
+    val transportCo2Today: StateFlow<Double> = combine(isInstitution, repository.getTodayTransportCo2(startOfDay()), institutionProfile, individualProfile, hasTraveledToday) {
+        isInst, trackedTransport, instProfile, indProfile, hasTraveled ->
         if (isInst && instProfile != null) {
             val instResult = InstitutionCarbonEngine.calculateDailyTotal(instProfile)
             instResult.transportKg
+        } else if (!hasTraveled) {
+            0.0 // User explicitly said they didn't travel
         } else {
+
             // Logic for individuals: 
             // 1. If we have tracked data, use it.
             // 2. If tracked data is 0, use the profile baseline (from onboarding).
@@ -75,15 +95,18 @@ class DashboardViewModel @Inject constructor(
                 // Baseline daily transport from profile
                 CarbonEngine.calculateBreakdown(
                     com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.OnboardingData(
-                        primaryMode = TransportMode.valueOf(indProfile.travelMode.uppercase()),
+                        primaryMode = TransportMode.valueOf((indProfile.travelMode ?: "CAR").uppercase()),
+
                         kmPerDay = indProfile.kmPerDay,
                         fuelType = FuelType.valueOf(indProfile.fuelType.uppercase()),
                         monthlyKwhBase = indProfile.monthlyKwhBase,
-                        acSeasonality = indProfile.acSeasonality,
+                        acSeasonality = indProfile.acSeasonality ?: ACSeasonality.NONE,
                         gridFactor = indProfile.gridFactor,
-                        dietType = DietType.valueOf(indProfile.dietType.uppercase()),
+
+                        dietType = DietType.valueOf((indProfile.dietType ?: "VEGETARIAN").uppercase()),
                         mealsPerDay = indProfile.mealsPerDay,
-                        screenTimeCategory = ScreenTime.valueOf(indProfile.screenTimeCategory.uppercase()),
+                        screenTimeCategory = ScreenTime.valueOf((indProfile.screenTimeCategory ?: "MODERATE").uppercase()),
+
                         deviceCount = indProfile.deviceCount,
                         streamingHeavy = indProfile.streamingHeavy
                     )
@@ -126,6 +149,16 @@ class DashboardViewModel @Inject constructor(
             individualDigital ?: 0.0
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val digitalMinutesToday: StateFlow<Long> = repository.getTodayDigitalMinutes(startOfDay())
+        .map { it ?: 0L }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    val systemMinutesToday: StateFlow<Long> = repository.getTodaySystemMinutes(startOfDay())
+        .map { it ?: 0L }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+
 
     val wasteCo2Today: StateFlow<Double> = combine(isInstitution, institutionProfile) {
         isInst, instProfile ->
@@ -191,17 +224,29 @@ class DashboardViewModel @Inject constructor(
     val healthConnectSteps: StateFlow<Int?> = _healthConnectSteps.asStateFlow()
 
     private val _healthPermissionsGranted = MutableStateFlow(false)
-
     val healthPermissionsGranted: StateFlow<Boolean> = _healthPermissionsGranted.asStateFlow()
+
+    private val _hasUsageStatsPermission = MutableStateFlow(false)
+    val hasUsageStatsPermission: StateFlow<Boolean> = _hasUsageStatsPermission.asStateFlow()
+
 
     val isHealthConnectAvailable: Boolean
         get() = healthConnectManager.isAvailable()
 
-    fun checkHealthPermissions() {
+    fun checkPermissions() {
         viewModelScope.launch {
             _healthPermissionsGranted.value = healthConnectManager.hasAllPermissions()
+            
+            val appOps = getApplication<Application>().getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                getApplication<Application>().packageName
+            )
+            _hasUsageStatsPermission.value = mode == android.app.AppOpsManager.MODE_ALLOWED
         }
     }
+
 
     val unverifiedSegments: StateFlow<List<TransportSegment>> = repository
 
@@ -210,8 +255,9 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val observer = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "steps_today" || key == "user_type") {
+        if (key == "steps_today" || key == "user_type" || key == "has_traveled_today") {
             updateSteps()
+
             // Re-collect flows that depend on user_type
             viewModelScope.launch { isInstitution.collect() }
             viewModelScope.launch { institutionProfile.collect() }
@@ -256,9 +302,87 @@ class DashboardViewModel @Inject constructor(
         }
 
         refreshDashboard()
-        checkHealthPermissions()
+        checkPermissions()
         updateSteps()
+        initNlpModel()
+        
+        // Demo: Prepopulate data for Monday-Wednesday
+        viewModelScope.launch {
+            repository.insertDemoData()
+        }
     }
+
+
+    private fun initNlpModel() {
+        val apiKey = com.example.theglobalcarbonfootprintproject.BuildConfig.GEMINI_API_KEY
+        if (apiKey.isNotBlank()) {
+            val userType = if (sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION") 
+                com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.UserType.INSTITUTION 
+                else com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.UserType.INDIVIDUAL
+                
+            generativeModel = com.google.ai.client.generativeai.GenerativeModel(
+                modelName = "gemini-1.5-flash",
+                apiKey = apiKey,
+                systemInstruction = com.google.ai.client.generativeai.type.content { 
+                    text(com.example.theglobalcarbonfootprintproject.calculator.NlpLogger.getSystemPrompt(userType)) 
+                }
+            )
+        }
+    }
+
+    fun processNlpInput(text: String) {
+        if (text.isBlank() || generativeModel == null) return
+        
+        viewModelScope.launch {
+            _nlpLoading.value = true
+            try {
+                val response = generativeModel!!.generateContent(text)
+                val jsonStr = response.text ?: ""
+                val parsed = com.example.theglobalcarbonfootprintproject.calculator.NlpLogger.parseResponse(jsonStr)
+                if (parsed != null) {
+                    repository.saveAiParsedLog(parsed)
+                    _nlpResult.value = "Successfully logged ${parsed.category}!"
+                    refreshDashboard()
+                } else {
+                    _nlpResult.value = "Couldn't understand that. Try being more specific!"
+                }
+            } catch (e: Exception) {
+                _nlpResult.value = "Error: ${e.message}"
+            } finally {
+                _nlpLoading.value = false
+            }
+        }
+    }
+
+    fun clearNlpResult() {
+        _nlpResult.value = null
+    }
+
+
+
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (true) {
+                // Poll every 10 seconds when active to simulate live counter
+                kotlinx.coroutines.delay(10000)
+                updateSteps()
+                Log.d("DashboardVM", "Active foreground poll triggered (10s)")
+            }
+        }
+    }
+
+    private fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+        Log.d("DashboardVM", "Polling stopped (Background)")
+    }
+
+
+    fun setHasTraveledToday(traveled: Boolean) {
+        sharedPreferences.edit().putBoolean("has_traveled_today", traveled).apply()
+    }
+
 
 
     override fun onCleared() {
@@ -277,7 +401,14 @@ class DashboardViewModel @Inject constructor(
 
     override fun onResume(owner: LifecycleOwner) {
         refreshDashboard()
+        updateSteps()
+        startPolling()
     }
+
+    override fun onPause(owner: LifecycleOwner) {
+        stopPolling()
+    }
+
 
     fun updateSteps() {
         viewModelScope.launch {
@@ -320,9 +451,10 @@ class DashboardViewModel @Inject constructor(
 
     fun refreshDashboard() {
         viewModelScope.launch {
-            checkHealthPermissions()
+            checkPermissions()
             repository.syncDigitalFootprint(getApplication())
         }
+
         // Save today's snapshot as a CarbonLog (for history charts + MongoDB sync)
         // This is an Upsert: delete existing log for today and save fresh one
         viewModelScope.launch(Dispatchers.IO) {
@@ -424,14 +556,17 @@ class DashboardViewModel @Inject constructor(
                         com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.OnboardingData(
                             name = it.name,
                             userType = UserType.INDIVIDUAL,
-                            dietType = DietType.valueOf(it.dietType.uppercase()),
+                            dietType = DietType.valueOf((it.dietType ?: "VEGETARIAN").uppercase()),
                             mealsPerDay = it.mealsPerDay,
-                            primaryMode = TransportMode.valueOf(it.travelMode.uppercase()),
+                            primaryMode = TransportMode.valueOf((it.travelMode ?: "CAR").uppercase()),
+
                             fuelType = FuelType.valueOf(it.fuelType.uppercase()),
                             kmPerDay = it.kmPerDay,
-                            acSeasonality = it.acSeasonality,
+                            acSeasonality = it.acSeasonality ?: ACSeasonality.NONE,
                             monthlyKwhBase = it.monthlyKwhBase,
-                            screenTimeCategory = ScreenTime.valueOf(it.screenTimeCategory.uppercase()),
+
+                            screenTimeCategory = ScreenTime.valueOf((it.screenTimeCategory ?: "MODERATE").uppercase()),
+
                             deviceCount = it.deviceCount,
                             streamingHeavy = it.streamingHeavy,
                             gridFactor = it.gridFactor
@@ -443,23 +578,24 @@ class DashboardViewModel @Inject constructor(
                         deviceId = deviceId,
                         date = today,
                         userType = UserType.INDIVIDUAL.name,
-                        transportKg = breakdown?.get("Transport") ?: 0.0,
-                        energyKg = breakdown?.get("Energy") ?: 0.0,
-                        foodKg = breakdown?.get("Food") ?: 0.0,
-                        digitalKg = breakdown?.get("Digital") ?: 0.0,
+                        transportKg = transportCo2Today.value,
+                        energyKg = energyCo2Today.value,
+                        foodKg = foodCo2Today.value,
+                        digitalKg = digitalCo2Today.value,
                         wasteKg = 0.0,
                         eventKg = 0.0,
-                        totalKg = breakdown?.values?.sum() ?: 0.0,
+                        totalKg = totalCo2Today.value,
                         score = currentCarbonScore,
                         kmWalked = repository.getTodayWalkingKm(startOfDay()).first() ?: 0.0,
+                        stepsCount = stepsToday.value,
 
-                        stepsCount = sharedPreferences.getInt("steps_today", 0),
                         energyLogged = repository.hasLoggedEnergyToday(startOfDay()).first(),
                         foodLogged = repository.hasLoggedFoodToday(startOfDay()).first(),
                         transportAutoDetected = repository.getTodaySegments(startOfDay()).first().isNotEmpty(),
                         electricityMethod = electricityMethod,
                         seasonLabel = SeasonalElectricityCalculator.getSeasonLabel()
                     )
+
                 }
 
                 apiService.syncDailyLog(deviceId, logRequest)
