@@ -48,11 +48,17 @@ class AiAssistantViewModel @Inject constructor(
     private fun initializeAssistant() {
         viewModelScope.launch {
             val userProfile = carbonDao.getUserProfile().first()
-            val name = userProfile?.name ?: "Eco-warrior"
+            val instProfile = carbonDao.getInstitutionProfile().first()
+            val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
+            
+            val name = if (isInst) instProfile?.name ?: "Campus Admin" else userProfile?.name ?: "Eco-warrior"
 
-            // Build personalized tips from profile
+            // Build personalized tips
             val tips = mutableListOf<String>()
-            if (userProfile != null) {
+            if (isInst && instProfile != null) {
+                if ((instProfile.solarCapacityKw) <= 0) tips.add("Transitioning to solar could offset a major part of your energy bill.")
+                if (instProfile.paperReamsMonth > 500) tips.add("Digitizing office workflows could save ${instProfile.paperReamsMonth} reams of paper monthly.")
+            } else if (userProfile != null) {
                 if (userProfile.kmPerDay > 20 && userProfile.travelMode != "METRO") {
                     tips.add("Your commute is quite long! Consider carpooling or switching to the metro.")
                 }
@@ -62,9 +68,6 @@ class AiAssistantViewModel @Inject constructor(
                 if (userProfile.acUsage) {
                     tips.add("Set your AC to 24°C instead of 18°C to save energy.")
                 }
-                if (userProfile.streamingHeavy) {
-                    tips.add("Download videos on Wi-Fi instead of streaming over mobile data.")
-                }
             }
 
             if (tips.isEmpty()) {
@@ -73,43 +76,39 @@ class AiAssistantViewModel @Inject constructor(
                 tips.add("Carry a reusable water bottle.")
             }
 
-            // Generate 4 generic suggestion chips
             val suggestions = buildSuggestions(userProfile)
 
-            val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
-            val welcomeMessage = if (isInst) {
-                val instProfile = carbonDao.getInstitutionProfile().first()
-                val instName = instProfile?.name ?: "our Institution"
-                val solarText = if ((instProfile?.solarCapacityKw ?: 0.0) > 0) "Your ${instProfile?.solarCapacityKw}kW solar setup is fantastic!" else "Have you considered solar power for the campus?"
-                "Hello $instName! I am your Campus Sustainability Consultant. $solarText Currently, your daily energy footprint is approximately ${String.format(java.util.Locale.getDefault(), "%.1f", instProfile?.monthlyEnergyKwh?.div(30.0) ?: 0.0)} kWh. How can I help you optimize today?"
+            val welcomeMessage = if (isInst && instProfile != null) {
+                val solarText = if (instProfile.solarCapacityKw > 0) "Your ${instProfile.solarCapacityKw}kW solar setup is fantastic!" else "Have you considered solar power for the campus?"
+                "Hello $name! I am your Campus Sustainability Consultant. $solarText Currently, your daily energy footprint is approximately ${String.format(java.util.Locale.US, "%.1f", instProfile.monthlyEnergyKwh / 30.0)} kWh. How can I help you optimize today?"
             } else {
                 val tipText = tips.joinToString("\n- ")
                 "Hello $name! Here are some personalized tips based on your profile:\n- $tipText\n\nTap a suggestion below or ask me anything!"
             }
 
-
             _uiState.value = AiUiState(
                 messages = listOf(ChatMessage(welcomeMessage, false)),
                 isLoading = false,
                 suggestions = suggestions,
-                geminiConnected = true // We assume online as we use backend
+                geminiConnected = true 
             )
 
             // Define Persona Context
             chatContext = if (isInst) {
-                "You are a specialized Institutional Carbon Consultant for an Indian campus/organization. " +
+                "You are a specialized Institutional Carbon Consultant for an Indian campus/organization named $name. " +
                 "Provide strategic, data-driven advice on reducing the carbon footprint of large facilities. " +
-                "Focus on: HVAC optimization, solar transition, large-scale waste management (biogas/composting), " +
-                "and sustainable procurement. Keep responses professional and actionable for campus administrators."
+                "Context: State: ${instProfile?.state}, Student Count: ${instProfile?.studentCount}, Energy: ${instProfile?.monthlyEnergyKwh} kWh/mo. " +
+                "Focus on: HVAC optimization, solar transition, large-scale waste management, " +
+                "and sustainable procurement. Keep responses professional and actionable."
             } else {
-                "You are a highly helpful Carbon Footprint Assistant for an Indian user. The user's name is $name. " +
+                "You are a highly helpful Carbon Footprint Assistant for an Indian user named $name. " +
+                "Context: State: ${userProfile?.state}, Commute: ${userProfile?.kmPerDay} km. " +
                 "Provide practical, encouraging, and specific advice on reducing carbon footprint. " +
-                "Focus on Indian context: public transport like metros and buses, seasonal electricity with ACs, " +
-                "vegetarian vs non-vegetarian diets, and digital footprint from streaming. " +
-                "Keep responses concise (2-3 paragraphs max)."
+                "Focus on Indian context. Keep responses concise (2-3 paragraphs max)."
             }
         }
     }
+
 
     private fun buildSuggestions(profile: com.example.theglobalcarbonfootprintproject.data.local.entities.UserProfile?): List<String> {
         val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"

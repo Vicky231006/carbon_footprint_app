@@ -16,12 +16,30 @@ fun LeaderboardScreen(
     viewModel: LeaderboardViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Community Leaderboard", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Earn points by logging sustainable activities!", style = MaterialTheme.typography.bodyMedium)
-        Spacer(modifier = Modifier.height(24.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedCategory == "INDIVIDUAL",
+                onClick = { viewModel.setCategory("INDIVIDUAL") },
+                label = { Text("Individuals") }
+            )
+            FilterChip(
+                selected = selectedCategory == "INSTITUTION",
+                onClick = { viewModel.setCategory("INSTITUTION") },
+                label = { Text("Institutions") }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.users) { user ->

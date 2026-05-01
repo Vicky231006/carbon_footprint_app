@@ -28,14 +28,19 @@ object NetworkModule {
     fun provideOkHttpClient(loggingInterceptor: HttpLoggingInterceptor): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            .connectTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .callTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
             .build()
+
     }
 
     @Provides
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://carbon-footprint-app-backend.onrender.com/") 
+            .baseUrl("http://192.168.1.107:3000/") 
 
             .addConverterFactory(GsonConverterFactory.create())
             .client(okHttpClient)

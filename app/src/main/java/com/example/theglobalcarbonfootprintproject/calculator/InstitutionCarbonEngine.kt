@@ -98,7 +98,8 @@ object InstitutionCarbonEngine {
 
     fun calculateWasteKg(d: InstitutionProfile): Double {
         // Paper: 1 ream (500 sheets A4) = ~2.1 kg CO₂
-        val paperKg = (d.paperReavesMonth / 30.0) * 2.1
+        val paperKg = (d.paperReamsMonth / 30.0) * 2.1
+
         return paperKg
     }
 
@@ -112,7 +113,45 @@ object InstitutionCarbonEngine {
         }
         return annualKg / 365.0  // spread to daily contribution
     }
+
+    fun calculateMonthlyBreakdown(d: InstitutionProfile): Map<Int, Double> {
+        val result = calculateDailyTotal(d)
+        // Base emissions without events
+        val dailyBase = result.totalKg - result.eventKg
+        val monthlyBase = dailyBase * 30.42 // Average days in month (365/12)
+
+        val type = object : TypeToken<List<com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.AnnualEvent>>() {}.type
+        val annualEvents: List<com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.AnnualEvent> = Gson().fromJson(d.annualEventsJson, type) ?: emptyList()
+
+        val monthlyMap = mutableMapOf<Int, Double>()
+        for (m in 1..12) {
+            var monthTotal = monthlyBase
+            // Add specific events that happen in this month
+            annualEvents.filter { it.month == m }.forEach { event ->
+                monthTotal += event.attendance * event.durationDays * 2.5
+            }
+            monthlyMap[m] = monthTotal
+        }
+        return monthlyMap
+    }
+
+    fun calculateDepartmentBreakdown(d: InstitutionProfile): Map<String, Double> {
+        val type = object : TypeToken<List<com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.DepartmentBreakdown>>() {}.type
+        val departments: List<com.example.theglobalcarbonfootprintproject.ui.screens.onboarding.DepartmentBreakdown> = Gson().fromJson(d.departmentBreakdownJson, type) ?: emptyList()
+
+        if (departments.isEmpty()) {
+            return mapOf("General Operations" to calculateDailyTotal(d).totalKg)
+        }
+
+        val totalDaily = calculateDailyTotal(d).totalKg
+        val totalWeight = departments.sumOf { it.energyWeight }.takeIf { it > 0 } ?: 1.0
+        
+        return departments.associate { dept ->
+            dept.name to (totalDaily * (dept.energyWeight / totalWeight))
+        }
+    }
 }
+
 
 data class InstitutionResult(
     val energyKg: Double,

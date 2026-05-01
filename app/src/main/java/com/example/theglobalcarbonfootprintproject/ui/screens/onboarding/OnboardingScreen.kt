@@ -23,6 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+
+import androidx.compose.material.icons.automirrored.filled.FactCheck
+
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -257,7 +260,8 @@ fun OnboardingScreen(
                         canteenFuel = onboardingData.canteenFuel,
                         lpgCylindersMonth = onboardingData.lpgCylindersMonth,
                         dailyMealsServed = onboardingData.dailyMealsServed,
-                        paperReavesMonth = onboardingData.paperReavesMonth,
+                        paperReamsMonth = onboardingData.paperReamsMonth,
+
                         onBack = { viewModel.prevStep() },
                         onDataChanged = { hasCanteen, fuel, lpg, meals, paper ->
                             viewModel.updateData { it.copy(
@@ -265,7 +269,8 @@ fun OnboardingScreen(
                                 canteenFuel = fuel,
                                 lpgCylindersMonth = lpg,
                                 dailyMealsServed = meals,
-                                paperReavesMonth = paper
+                                paperReamsMonth = paper
+
                             ) }
                         },
                         onNext = { viewModel.nextStep() }
@@ -293,20 +298,53 @@ fun OnboardingScreen(
                 }
             }
             10 -> {
-                SummaryStep(
-                    progress = progress,
-                    viewModel = viewModel,
-                    onBack = { viewModel.prevStep() },
-                    onNext = { viewModel.nextStep() }
-                )
+                if (onboardingData.userType == UserType.INDIVIDUAL) {
+                    SummaryStep(
+                        progress = progress,
+                        viewModel = viewModel,
+                        onBack = { viewModel.prevStep() },
+                        onNext = { viewModel.nextStep() }
+                    )
+                } else {
+                    InstitutionDepartmentsStep(
+                        progress = progress,
+                        departments = onboardingData.departments,
+                        onBack = { viewModel.prevStep() },
+                        onDataChanged = { depts ->
+                            viewModel.updateData { it.copy(departments = depts) }
+                        },
+                        onNext = { viewModel.nextStep() }
+                    )
+                }
             }
             11 -> {
+                if (onboardingData.userType == UserType.INDIVIDUAL) {
+                    val context = LocalContext.current
+                    val prefs = remember { context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE) }
+                    FinalizingStep(
+                        progress = progress,
+                        onComplete = {
+                            viewModel.completeOnboarding(prefs) {
+                                onOnboardingComplete()
+                            }
+                        }
+                    )
+                } else {
+                    SummaryStep(
+                        progress = progress,
+                        viewModel = viewModel,
+                        onBack = { viewModel.prevStep() },
+                        onNext = { viewModel.nextStep() }
+                    )
+                }
+            }
+            12 -> {
                 val context = LocalContext.current
                 val prefs = remember { context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE) }
                 FinalizingStep(
                     progress = progress,
                     onComplete = {
-                        viewModel.saveToPreferences(prefs) {
+                        viewModel.completeOnboarding(prefs) {
                             onOnboardingComplete()
                         }
                     }
@@ -314,12 +352,13 @@ fun OnboardingScreen(
             }
             else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Button(onClick = onOnboardingComplete) {
-                    Text("Finish (Integration in Progress)")
+                    Text("Finish")
                 }
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -338,8 +377,9 @@ fun ReviewStep(
         onContinue = onNext,
         continueText = "Confirm and Continue",
         illustration = {
-            Icon(Icons.Default.FactCheck, null, modifier = Modifier.size(80.dp), tint = Color(0xFF2E7D32))
+            Icon(Icons.AutoMirrored.Filled.FactCheck, null, modifier = Modifier.size(80.dp), tint = Color(0xFF2E7D32))
         }
+
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text("User Type: ", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
@@ -398,7 +438,8 @@ fun ReviewStep(
                 Text("Has Canteen: ${if (data.hasCanteen) "Yes" else "No"}, Fuel: ${data.canteenFuel.name}, LPG: ${data.lpgCylindersMonth} cyl/month, Meals: ${data.dailyMealsServed}", modifier = Modifier.padding(bottom = 8.dp))
 
                 Text("Waste: ", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
-                Text("${data.paperReavesMonth} reams paper/month", modifier = Modifier.padding(bottom = 8.dp))
+                Text("${data.paperReamsMonth} reams paper/month", modifier = Modifier.padding(bottom = 8.dp))
+
 
                 if (data.annualEvents.isNotEmpty()) {
                     Text("Events: ", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
@@ -1004,7 +1045,8 @@ fun SummaryStep(
             canteenFuel = data.canteenFuel.name,
             lpgCylindersMonth = data.lpgCylindersMonth,
             dailyMealsServed = data.dailyMealsServed,
-            paperReavesMonth = data.paperReavesMonth,
+            paperReamsMonth = data.paperReamsMonth,
+
             annualEventsJson = Gson().toJson(data.annualEvents)
         )
         com.example.theglobalcarbonfootprintproject.calculator.InstitutionCarbonEngine.calculateDailyTotal(instProfile).totalKg
@@ -1096,7 +1138,8 @@ fun SummaryStep(
                 canteenFuel = data.canteenFuel.name,
                 lpgCylindersMonth = data.lpgCylindersMonth,
                 dailyMealsServed = data.dailyMealsServed,
-                paperReavesMonth = data.paperReavesMonth,
+                paperReamsMonth = data.paperReamsMonth,
+
                 annualEventsJson = Gson().toJson(data.annualEvents)
             )
             val instResult = com.example.theglobalcarbonfootprintproject.calculator.InstitutionCarbonEngine.calculateDailyTotal(instProfile)
@@ -1131,12 +1174,13 @@ fun SummaryStep(
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(category, modifier = Modifier.weight(1f))
                 Text(
-                    String.format(Locale.getDefault(), "%.2f kg", value),
+                    String.format(Locale.US, "%.2f kg", value),
                     fontWeight = FontWeight.Bold
                 )
             }
             LinearProgressIndicator(
-                progress = (value / totalBaseline).toFloat(),
+                progress = { (value / totalBaseline).toFloat() },
+
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
@@ -1607,7 +1651,8 @@ fun InstitutionTransportStep(
     onNext: () -> Unit
 ) {
     val context = LocalContext.current
-    var localCommuteSplit by remember { mutableStateOf(studentCommuteSplit.toMutableMap()) }
+    val localCommuteSplit = remember { mutableStateMapOf<TransportMode, Int>().apply { putAll(studentCommuteSplit) } }
+
     var localAvgCommuteKm by remember { mutableStateOf(avgCommuteKm.toFloat()) }
     var localInstitutionBusCount by remember { mutableIntStateOf(institutionBusCount) }
     var localBusFuelType by remember { mutableStateOf(busFuelType) }
@@ -1651,9 +1696,8 @@ fun InstitutionTransportStep(
                 Text(currentPct.toString() + "%", modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
                 Slider(
                     value = currentPct.toFloat(),
-                    onValueChange = { newValue ->
-                        localCommuteSplit = localCommuteSplit.toMutableMap().apply { this[mode] = newValue.toInt() }
-                    },
+                    onValueChange = { localCommuteSplit[mode] = it.toInt() },
+
                     valueRange = 0f..100f,
                     steps = 100,
                     modifier = Modifier.weight(2f)
@@ -1730,16 +1774,18 @@ fun InstitutionCanteenWasteStep(
     canteenFuel: CanteenFuel,
     lpgCylindersMonth: Int,
     dailyMealsServed: Int,
-    paperReavesMonth: Int,
+    paperReamsMonth: Int,
     onBack: () -> Unit,
     onDataChanged: (Boolean, CanteenFuel, Int, Int, Int) -> Unit,
     onNext: () -> Unit
+
 ) {
     var localHasCanteen by remember { mutableStateOf(hasCanteen) }
     var localCanteenFuel by remember { mutableStateOf(canteenFuel) }
     var localLpgCylindersMonth by remember { mutableIntStateOf(lpgCylindersMonth) }
     var localDailyMealsServed by remember { mutableIntStateOf(dailyMealsServed) }
-    var localPaperReavesMonth by remember { mutableIntStateOf(paperReavesMonth) }
+    var localPaperReamsMonth by remember { mutableIntStateOf(paperReamsMonth) }
+
 
     OnboardingStepContainer(
         title = "Food and waste",
@@ -1753,7 +1799,8 @@ fun InstitutionCanteenWasteStep(
                 localCanteenFuel,
                 if (localCanteenFuel == CanteenFuel.LPG || localCanteenFuel == CanteenFuel.MIXED) localLpgCylindersMonth else 0,
                 if (localHasCanteen) localDailyMealsServed else 0,
-                localPaperReavesMonth
+                localPaperReamsMonth
+
             )
             onNext()
         },
@@ -1808,7 +1855,8 @@ fun InstitutionCanteenWasteStep(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Stepper(value = localPaperReavesMonth, onValueChange = { localPaperReavesMonth = it }, range = 0..2000, label = "Paper waste (approximate reams of paper per month)")
+        Stepper(value = localPaperReamsMonth, onValueChange = { localPaperReamsMonth = it }, range = 0..2000, label = "Paper waste (approximate reams of paper per month)")
+
     }
 }
 
@@ -1875,6 +1923,27 @@ fun InstitutionEventsStep(
                             range = 1..5,
                             label = "Duration (days)"
                         )
+                        
+                        // Month Selector
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Event Month", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            months.forEachIndexed { mIndex, mName ->
+                                FilterChip(
+                                    selected = event.month == mIndex + 1,
+                                    onClick = { 
+                                        localAnnualEvents = localAnnualEvents.toMutableList().apply { this[index] = event.copy(month = mIndex + 1) } 
+                                    },
+                                    label = { Text(mName, style = MaterialTheme.typography.bodySmall) }
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(onClick = { localAnnualEvents = localAnnualEvents.toMutableList().apply { removeAt(index) } }) {
                             Text("Remove Event")
@@ -1882,6 +1951,7 @@ fun InstitutionEventsStep(
                     }
                 }
             }
+
 
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = {
@@ -1892,6 +1962,78 @@ fun InstitutionEventsStep(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InstitutionDepartmentsStep(
+    progress: Float,
+    departments: List<DepartmentBreakdown>,
+    onBack: () -> Unit,
+    onDataChanged: (List<DepartmentBreakdown>) -> Unit,
+    onNext: () -> Unit
+) {
+    val localDepts = remember { mutableStateListOf<DepartmentBreakdown>().apply { addAll(departments) } }
+
+
+    OnboardingStepContainer(
+        title = "Departmental Breakdown",
+        subtitle = "Break down your institution by departments to see which areas have the most impact.",
+        progress = progress,
+        showBack = true,
+        onBack = onBack,
+        onContinue = { onDataChanged(localDepts); onNext() },
+        showSkip = true,
+        onSkip = onNext,
+        illustration = { Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(80.dp), tint = Color(0xFF2E7D32)) }
+    ) {
+        if (localDepts.isEmpty()) {
+            Text("Add your major departments (e.g., Computer Science, Mechanical, Admin, Library)", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        localDepts.forEachIndexed { index, dept ->
+            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = dept.name,
+                        onValueChange = { localDepts[index] = dept.copy(name = it) },
+
+                        label = { Text("Department Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(String.format(Locale.US, "Energy Intensity Weight: %.1f", dept.energyWeight), style = MaterialTheme.typography.labelLarge)
+
+                    Text("1.0 is standard (Classrooms), higher (2.0+) for Labs/Workshops", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Slider(
+                        value = dept.energyWeight.toFloat(),
+                        onValueChange = { localDepts[index] = dept.copy(energyWeight = it.toDouble()) },
+
+                        valueRange = 0.5f..5.0f,
+                        steps = 9,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Button(onClick = { localDepts.removeAt(index) }, modifier = Modifier.align(Alignment.End)) {
+
+                        Text("Remove")
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { localDepts.add(DepartmentBreakdown("New Dept", 100, 1.0)) },
+
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors()
+        ) {
+            Text("+ Add Department")
+        }
+    }
+}
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

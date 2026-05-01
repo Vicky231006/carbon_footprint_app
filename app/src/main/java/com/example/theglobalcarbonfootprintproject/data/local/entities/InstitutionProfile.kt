@@ -32,6 +32,9 @@ data class InstitutionProfile(
     val canteenFuel: String,        // CanteenFuel name
     val lpgCylindersMonth: Int,
     val dailyMealsServed: Int,
-    val paperReavesMonth: Int,
-    val annualEventsJson: String    // JSON List<AnnualEvent>
+    val paperReamsMonth: Int,
+
+    val annualEventsJson: String,   // JSON List<AnnualEvent>
+    val departmentBreakdownJson: String = "[]" // JSON List<DepartmentBreakdown>
 )
+

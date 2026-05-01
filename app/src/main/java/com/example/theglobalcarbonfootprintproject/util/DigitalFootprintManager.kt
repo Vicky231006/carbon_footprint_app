@@ -24,12 +24,32 @@ class DigitalFootprintManager @Inject constructor(
         cal.set(Calendar.MILLISECOND, 0)
         val startTime = cal.timeInMillis
 
-        // queryAndAggregateUsageStats requires PACKAGE_USAGE_STATS permission
-        val stats = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+        // queryUsageStats with INTERVAL_DAILY correctly bins the data starting at midnight
+        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        
+        android.util.Log.d("DigitalFootprint", "--- USAGE STATS QUERY RESULTS ---")
+        android.util.Log.d("DigitalFootprint", "Start Time: ${java.util.Date(startTime)}")
+        android.util.Log.d("DigitalFootprint", "End Time: ${java.util.Date(endTime)}")
         
         if (!stats.isNullOrEmpty()) {
-            val totalTimeMs = stats.values.sumOf { it.totalTimeInForeground }
+            val totalTimeMs = stats.sumOf { it.totalTimeInForeground }
             val minutes = totalTimeMs / (60 * 1000)
+            
+            android.util.Log.d("DigitalFootprint", "Total Time MS: $totalTimeMs")
+            android.util.Log.d("DigitalFootprint", "Total Minutes: $minutes")
+            
+            // Print top 5 apps for debugging
+            val sortedStats = stats.sortedByDescending { it.totalTimeInForeground }.take(5)
+            sortedStats.forEach { stat ->
+                val pkg = stat.packageName
+                val time = stat.totalTimeInForeground / (60 * 1000)
+                if (time > 0) {
+                    android.util.Log.d("DigitalFootprint", "App: $pkg, Minutes: $time")
+                }
+            }
+            
+            android.util.Log.d("DigitalFootprint", "---------------------------------")
+
             
             // CO2 Calculation: ~0.036kg per hour
             val co2Kg = (minutes / 60.0) * 0.036

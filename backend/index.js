@@ -49,7 +49,9 @@ async function connectToMongo() {
   }
 }
 
-connectToMongo();
+// connectToMongo is now only called once inside the app.listen callback to ensure it's ready.
+// connectToMongo();
+
 
 
 // AUTH ENDPOINTS
@@ -120,7 +122,14 @@ app.post('/api/auth/login', async (req, res) => {
       onboardingComplete: user.onboardingComplete || false
     };
 
-    res.status(200).json({ success: true, user: userToReturn, userId: user._id });
+    // If the user is an institution, fetch their profile
+    let institution = null;
+    if (user.userType === 'INSTITUTION') {
+      institution = await db.collection('institutions').findOne({ userId: user._id.toString() });
+    }
+
+    res.status(200).json({ success: true, user: userToReturn, userId: user._id, institution: institution });
+
   } catch (e) {
     console.error("   Login Error:", e);
     res.status(500).json({ success: false, error: e.message });
@@ -139,7 +148,8 @@ app.post('/api/users/:userId', async (req, res) => {
       { _id: new ObjectId(userId) },
       { $set: { ...userProfile, timestamp: new Date() } }
     );
-    console.log("   Successfully updated user profile:", userProfile.name);
+    console.log(`   Successfully updated user profile for ${userId}:`, userProfile.name, "State:", userProfile.state);
+
     res.status(200).json({ success: true });
   } catch (e) {
     console.error("   Error updating user:", e);
@@ -147,12 +157,25 @@ app.post('/api/users/:userId', async (req, res) => {
   }
 });
 
-app.post('/api/institutions', async (req, res) => {
+app.post('/api/institutions/:userId', async (req, res) => {
   try {
+    const { userId } = req.params;
     const instProfile = req.body;
     const collection = db.collection('institutions');
-    const result = await collection.insertOne({ ...instProfile, timestamp: new Date() });
+    
+    // Also update the user document to mark as institution and completed onboarding
+    await db.collection('users').updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { userType: 'INSTITUTION', onboardingComplete: true, name: instProfile.name } }
+    );
+
+    const result = await collection.updateOne(
+      { userId: userId },
+      { $set: { ...instProfile, userId, timestamp: new Date() } },
+      { upsert: true }
+    );
     res.status(200).json({ success: true, result });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, error: e.message });
@@ -162,23 +185,60 @@ app.post('/api/institutions', async (req, res) => {
 // LEADERBOARD ENDPOINT
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const { state } = req.query;
-    const query = state ? { state: state, baseline_co2_daily: { $gt: 0 } } : { baseline_co2_daily: { $gt: 0 } };
+    const { state, userType } = req.query;
+    console.log(`[LEADERBOARD] Request received for state: ${state}, type: ${userType}`);
     
-    const collection = db.collection('users');
-    const leaderboard = await collection
-      .find(query)
-      .project({ name: 1, state: 1, baseline_co2_daily: 1 })
-      .sort({ baseline_co2_daily: 1 }) // Lowest footprint first
-      .limit(50)
-      .toArray();
+    if (!db) {
+       console.log("[LEADERBOARD] DB not initialized!");
+       return res.status(500).json({ success: false, error: "DB not initialized" });
+    }
 
-    res.status(200).json({ success: true, leaderboard });
+    // Determine which collection to use
+    const collectionName = userType === 'INSTITUTION' ? 'institution_scores' : 'scores';
+    const scoresCollection = db.collection(collectionName);
+    
+    // Aggregation to get the LATEST score for each user in the selected state
+    const pipeline = [
+      {
+        $match: state 
+          ? { state: { $regex: new RegExp(`^${state}$`, "i") } } 
+          : {}
+      },
+      { $sort: { timestamp: -1 } }, // Sort by newest first
+      {
+        $group: {
+          _id: "$userId",
+          name: { $first: "$name" },
+          state: { $first: "$state" },
+          score: { $first: "$score" },
+          timestamp: { $first: "$timestamp" }
+        }
+      },
+      { $sort: { score: -1 } }, // Sort by highest score first
+      { $limit: 50 }
+    ];
+
+    const leaderboard = await scoresCollection.aggregate(pipeline).toArray();
+
+    console.log(`[LEADERBOARD] Found ${leaderboard.length} users in ${collectionName}`);
+
+    const mappedLeaderboard = leaderboard.map(user => ({
+      name: user.name || "Anonymous",
+      state: user.state || "",
+      baseline_co2_daily: user.score || 0
+    }));
+
+    console.log(`[LEADERBOARD] Sending results from ${collectionName}:`, JSON.stringify(mappedLeaderboard));
+
+    res.status(200).json({ success: true, leaderboard: mappedLeaderboard });
+
+
   } catch (e) {
-    console.error(e);
+    console.error("[LEADERBOARD] ERROR:", e);
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
 
 // HISTORY & LOGS ENDPOINTS
 app.post('/api/logs/:userId', async (req, res) => {
@@ -197,6 +257,46 @@ app.post('/api/logs/:userId', async (req, res) => {
       { $set: { ...logData, userId, dateStr, updatedAt: new Date() } },
       { upsert: true }
     );
+
+    // Save the latest score back to the user document for the leaderboard
+    if (logData.score !== undefined) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+      const state = user ? user.state : "Unknown";
+      const name = user ? user.name : "Anonymous";
+
+      await db.collection('users').updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { current_score: logData.score, latest_total_kg: logData.totalKg } }
+      );
+
+      // Log to 'scores' collection with 6-hour bucket
+      const now = new Date();
+      const hour = now.getHours();
+      const bucketHour = Math.floor(hour / 6) * 6;
+      const bucketTimestamp = new Date(now);
+      bucketTimestamp.setHours(bucketHour, 0, 0, 0);
+
+      // Determine which collection to use
+      const collectionName = logData.userType === 'INSTITUTION' ? 'institution_scores' : 'scores';
+
+      await db.collection(collectionName).updateOne(
+        { userId, bucketTimestamp: bucketTimestamp.toISOString() },
+        { 
+          $set: { 
+            userId, 
+            name,
+            state,
+            score: logData.score, 
+            timestamp: now,
+            bucketTimestamp: bucketTimestamp.toISOString()
+          } 
+        },
+        { upsert: true }
+      );
+      console.log(`   [SCORES] Logged score ${logData.score} for ${name} in ${collectionName} (Bucket: ${bucketHour}:00)`);
+
+    }
+
 
     res.status(200).json({ success: true });
   } catch (e) {
@@ -232,21 +332,58 @@ app.post('/api/ai/chat', async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      systemInstruction: context
-    });
+    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-2.0-pro"];
+    let text = "";
+    let duration = 0;
+    let lastError = null;
 
-    const result = await model.generateContent(message);
-    const response = await result.response;
-    const text = response.text();
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`   [AI] Attempting with model: ${modelName}...`);
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          systemInstruction: context,
+        });
 
-    res.status(200).json({ success: true, reply: text });
+        const startTime = Date.now();
+        const result = await model.generateContent(message);
+        const response = await result.response;
+        text = response.text();
+        duration = Date.now() - startTime;
+        
+        console.log(`   [AI] Success with ${modelName} in ${duration}ms`);
+        lastError = null;
+        break; // Success!
+      } catch (e) {
+        lastError = e;
+        console.warn(`   [AI] Model ${modelName} failed: ${e.message.split('\n')[0]}`);
+        
+        // If it's a quota error, wait 300ms before trying the next model
+        if (e.message.includes("429")) {
+            await new Promise(r => setTimeout(r, 300));
+        }
+      }
+    }
+
+
+    if (lastError) throw lastError;
+
+    res.status(200).json({ success: true, reply: text, durationMs: duration });
+
   } catch (e) {
-    console.error("   AI Error:", e);
-    res.status(500).json({ success: false, error: e.message });
+    console.error("\n❌ [AI CRITICAL ERROR]");
+    console.error("   Message:", e.message);
+    
+    let clientError = e.message;
+    if (e.message.includes("429")) clientError = "AI Quota Exceeded (All models)";
+    if (e.message.includes("503")) clientError = "AI Service Busy (High Demand)";
+    if (e.message.includes("SAFETY")) clientError = "AI Response blocked by Safety Filters";
+
+    res.status(500).json({ success: false, error: clientError });
   }
 });
+
+
 
 
 // LEGACY COMPATIBILITY ENDPOINTS (For older app versions)

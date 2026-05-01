@@ -65,10 +65,11 @@ object DatabaseModule {
     }
 
     private val MIGRATION_6_7 = object : Migration(6, 7) {
-        override fun migrate(database: SupportSQLiteDatabase) {
-            database.execSQL("CREATE TABLE IF NOT EXISTS `institution_profile` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `city` TEXT NOT NULL, `state` TEXT NOT NULL, `gridFactor` REAL NOT NULL, `studentCount` INTEGER NOT NULL, `staffCount` INTEGER NOT NULL, `buildingFloors` INTEGER NOT NULL, `classroomCount` INTEGER NOT NULL, `classroomAC` TEXT NOT NULL, `labCount` INTEGER NOT NULL, `pcsPerLab` INTEGER NOT NULL, `labHoursPerDay` REAL NOT NULL, `hasServerRoom` INTEGER NOT NULL, `serverRoomSize` TEXT, `monthlyEnergyKwh` REAL NOT NULL, `solarCapacityKw` REAL NOT NULL, `generatorDieselLitresMonth` REAL NOT NULL, `studentCommuteSplitJson` TEXT NOT NULL, `avgCommuteKm` REAL NOT NULL, `institutionBusCount` INTEGER NOT NULL, `busFuelType` TEXT NOT NULL, `hasCanteen` INTEGER NOT NULL, `canteenFuel` TEXT NOT NULL, `lpgCylindersMonth` INTEGER NOT NULL, `dailyMealsServed` INTEGER NOT NULL, `paperReavesMonth` INTEGER NOT NULL, `annualEventsJson` TEXT NOT NULL, PRIMARY KEY(`id`))")
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS `institution_profile` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `city` TEXT NOT NULL, `state` TEXT NOT NULL, `gridFactor` REAL NOT NULL, `studentCount` INTEGER NOT NULL, `staffCount` INTEGER NOT NULL, `buildingFloors` INTEGER NOT NULL, `classroomCount` INTEGER NOT NULL, `classroomAC` TEXT NOT NULL, `labCount` INTEGER NOT NULL, `pcsPerLab` INTEGER NOT NULL, `labHoursPerDay` REAL NOT NULL, `hasServerRoom` INTEGER NOT NULL, `serverRoomSize` TEXT, `monthlyEnergyKwh` REAL NOT NULL, `solarCapacityKw` REAL NOT NULL, `generatorDieselLitresMonth` REAL NOT NULL, `studentCommuteSplitJson` TEXT NOT NULL, `avgCommuteKm` REAL NOT NULL, `institutionBusCount` INTEGER NOT NULL, `busFuelType` TEXT NOT NULL, `hasCanteen` INTEGER NOT NULL, `canteenFuel` TEXT NOT NULL, `lpgCylindersMonth` INTEGER NOT NULL, `dailyMealsServed` INTEGER NOT NULL, `paperReamsMonth` INTEGER NOT NULL, `annualEventsJson` TEXT NOT NULL, `departmentBreakdownJson` TEXT NOT NULL DEFAULT '[]', PRIMARY KEY(`id`))")
         }
     }
+
 
     private val MIGRATION_7_8 = object : Migration(7, 8) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -87,7 +88,20 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            try {
+                db.execSQL("ALTER TABLE `institution_profile` RENAME COLUMN `paperReavesMonth` TO `paperReamsMonth`")
+            } catch (e: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE `institution_profile` ADD COLUMN `departmentBreakdownJson` TEXT NOT NULL DEFAULT '[]'")
+            } catch (e: Exception) {}
+        }
+    }
+
+
     @Provides
+
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CarbonDatabase {
         return Room.databaseBuilder(
@@ -95,7 +109,8 @@ object DatabaseModule {
             CarbonDatabase::class.java,
             "carbon_db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_14_15)
+
         .fallbackToDestructiveMigration()
         .build()
     }

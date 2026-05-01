@@ -279,10 +279,14 @@ class DashboardViewModel @Inject constructor(
                 if (currentIsInstitution) {
                     val totalPersons = studentStaffCount.value.toDouble()
                     val perPersonKg = if (totalPersons > 0) total / totalPersons else 0.0
-                    _carbonScore.value = (4100 / (perPersonKg * 10)).toInt().coerceIn(0, 100)
+                    val score = (4100 / (perPersonKg * 10)).toInt().coerceIn(0, 100)
+                    _carbonScore.value = score
+                    sharedPreferences.edit().putInt("current_carbon_score", score).apply()
                 } else {
                     val dailyAvg = 9.58
-                    _carbonScore.value = (100 - (total / dailyAvg * 50)).toInt().coerceIn(0, 100)
+                    val score = (100 - (total / dailyAvg * 50)).toInt().coerceIn(0, 100)
+                    _carbonScore.value = score
+                    sharedPreferences.edit().putInt("current_carbon_score", score).apply()
                     
                     // Reward logic: If total CO2 is significantly below average and not yet rewarded today
                     if (total > 0 && total < dailyAvg * 0.8) {

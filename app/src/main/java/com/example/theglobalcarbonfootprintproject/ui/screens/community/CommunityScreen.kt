@@ -124,17 +124,14 @@ fun LeaderboardItem(rank: Int, name: String, score: Double) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    text = if (name.contains("IIT") || name.contains("University") || name.contains("Campus")) "Daily Per-Capita CO₂" else "Daily Baseline",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
 
 
 
+
             Text(
-                text = "${String.format(Locale.getDefault(), "%.1f", score)} kg",
+                text = String.format(Locale.getDefault(), "%.1f", score),
+
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary

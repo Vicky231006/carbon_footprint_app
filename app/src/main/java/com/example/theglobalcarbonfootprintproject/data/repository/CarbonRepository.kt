@@ -307,7 +307,11 @@ class CarbonRepository @Inject constructor(
         }
     }
 
+    suspend fun getLeaderboard(state: String?, userType: String) = 
+        mongoDbManager.getLeaderboard(state, userType)
+
     suspend fun syncCurrentUser() {
+
 
         // Disabled MongoDB sync
         Log.d("CarbonRepository", "Sync disabled")

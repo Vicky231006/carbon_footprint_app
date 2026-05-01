@@ -37,14 +37,17 @@ interface MongoApiService {
     @POST("api/users/{userId}")
     suspend fun saveUserProfile(@Path("userId") userId: String, @Body profile: UserProfile): ApiResponse
 
-    @POST("api/institutions")
-    suspend fun saveInstitutionProfile(@Body profile: InstitutionProfile): ApiResponse
+    @POST("api/institutions/{userId}")
+    suspend fun saveInstitutionProfile(@Path("userId") userId: String, @Body profile: InstitutionProfile): ApiResponse
+
 
     @GET("api/leaderboard")
-    suspend fun getLeaderboard(@Query("state") state: String?): ApiResponse
+    suspend fun getLeaderboard(@Query("state") state: String?, @Query("userType") userType: String?): ApiResponse
+
 
     @POST("api/logs/{userId}")
-    suspend fun syncLog(@Path("userId") userId: String, @Body log: com.example.theglobalcarbonfootprintproject.data.local.entities.CarbonLog): ApiResponse
+    suspend fun syncLog(@Path("userId") userId: String, @Body request: DailyLogRequest): ApiResponse
+
 
     @GET("api/logs/{userId}")
     suspend fun getLogs(@Path("userId") userId: String): LogHistoryResponse

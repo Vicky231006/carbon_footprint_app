@@ -24,6 +24,8 @@ fun WelcomeScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var isLoginMode by remember { mutableStateOf(true) }
+    var isInstitutionPortal by remember { mutableStateOf(false) }
+
     
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -63,17 +65,18 @@ fun WelcomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (isLoginMode) "Welcome Back" else "Join the Movement",
+                    text = if (isInstitutionPortal) "Institution Portal" else if (isLoginMode) "Welcome Back" else "Join the Movement",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (isLoginMode) "Log in to view your footprint" else "Create an account to start tracking",
+                    text = if (isInstitutionPortal) "Manage campus sustainability" else if (isLoginMode) "Log in to view your footprint" else "Create an account to start tracking",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
                 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -129,6 +132,19 @@ fun WelcomeScreen(
 
                 TextButton(onClick = { isLoginMode = !isLoginMode }) {
                     Text(if (isLoginMode) "Don't have an account? Sign up" else "Already have an account? Log in")
+                }
+                
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                
+                TextButton(onClick = { 
+                    isInstitutionPortal = !isInstitutionPortal 
+                    isLoginMode = true // Force login mode for institution portal
+                }) {
+                    Text(
+                        text = if (isInstitutionPortal) "Return to Individual Login" else "Institution Login",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
             }
         }

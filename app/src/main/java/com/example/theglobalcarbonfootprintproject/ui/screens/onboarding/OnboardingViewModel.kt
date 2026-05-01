@@ -31,7 +31,8 @@ class OnboardingViewModel @Inject constructor(
     val currentStep: StateFlow<Int> = _currentStep.asStateFlow()
 
     val totalSteps: Int
-        get() = 12
+        get() = if (_data.value.userType == UserType.INDIVIDUAL) 10 else 11
+
 
     val progressFraction: Float
         get() = if (totalSteps > 0) _currentStep.value.toFloat() / totalSteps else 0f
@@ -48,11 +49,21 @@ class OnboardingViewModel @Inject constructor(
         _currentStep.update { (it - 1).coerceAtLeast(0) }
     }
 
-    fun saveToPreferences(prefs: SharedPreferences, onComplete: () -> Unit) {
+    fun completeOnboarding(prefs: SharedPreferences, onComplete: () -> Unit) {
         val currentData = _data.value
         val gson = Gson()
         
         viewModelScope.launch {
+            // Save essential info to SharedPreferences first so sync can access them
+            prefs.edit()
+                .putBoolean("onboarding_complete", true)
+                .putString("user_type", currentData.userType.name)
+                .putString("user_name", if (currentData.userType == UserType.INDIVIDUAL) currentData.name else currentData.institutionName)
+                .putString("user_state", currentData.state)
+                .putFloat("grid_factor", currentData.gridFactor.toFloat())
+                .putLong("onboarding_timestamp", System.currentTimeMillis())
+                .apply()
+
             val totalBaseline: Double
             if (currentData.userType == UserType.INDIVIDUAL) {
                 val breakdown = CarbonEngine.calculateBreakdown(currentData)
@@ -122,11 +133,33 @@ class OnboardingViewModel @Inject constructor(
                     canteenFuel = currentData.canteenFuel.name,
                     lpgCylindersMonth = currentData.lpgCylindersMonth,
                     dailyMealsServed = currentData.dailyMealsServed,
-                    paperReavesMonth = currentData.paperReavesMonth,
-                    annualEventsJson = annualEventsJson
+                    paperReamsMonth = currentData.paperReamsMonth,
+
+                    annualEventsJson = annualEventsJson,
+                    departmentBreakdownJson = gson.toJson(currentData.departments)
                 )
+
                 repository.saveInstitutionProfile(instProfile)
                 val instResult = InstitutionCarbonEngine.calculateDailyTotal(instProfile)
+
+                // Save a skeleton UserProfile for institutions so the app knows user is onboarded
+
+                val skeletonProfile = UserProfile(
+                    name = instProfile.name,
+                    userType = "INSTITUTION",
+                    onboardingComplete = true,
+                    state = instProfile.state,
+                    baseline_co2_daily = instResult.totalKg
+                )
+                repository.saveUserProfile(skeletonProfile)
+
+                // Update SharedPreferences
+                prefs.edit().apply {
+                    putString("user_type", "INSTITUTION")
+                    putBoolean("onboarding_complete", true)
+                    apply()
+                }
+
                 totalBaseline = instResult.totalKg
                 
                 val initialLog = CarbonLog(
@@ -134,7 +167,7 @@ class OnboardingViewModel @Inject constructor(
                     transportKg = instResult.transportKg,
                     electricityKg = instResult.energyKg,
                     foodKg = instResult.foodKg,
-                    digitalKg = 0.0, // Institutions don't track digital footprint like individuals
+                    digitalKg = 0.0, 
                     wasteKg = instResult.wasteKg,
                     eventKg = instResult.eventKg,
                     totalKg = totalBaseline,
@@ -142,18 +175,8 @@ class OnboardingViewModel @Inject constructor(
                 )
                 repository.saveLog(initialLog)
             }
-
-            prefs.edit()
-                .putBoolean("onboarding_complete", true)
-                .putFloat("baseline_co2_daily", totalBaseline.toFloat())
-                .putString("user_type", currentData.userType.name)
-                .putString("user_name", if (currentData.userType == UserType.INDIVIDUAL) currentData.name else currentData.institutionName)
-                .putString("user_state", currentData.state)
-                .putFloat("grid_factor", currentData.gridFactor.toFloat())
-                .putLong("onboarding_timestamp", System.currentTimeMillis())
-                .apply()
-                
             onComplete()
+
         }
     }
 }

@@ -104,9 +104,10 @@ fun InstitutionDashboardContent(
                 BreakdownCard(
                     title = "Waste Calculation",
                     lines = listOf(
-                        "Paper Usage: ${p.paperReavesMonth} reams/mo",
+                        "Paper Usage: ${p.paperReamsMonth} reams/mo",
                         "Paper Footprint: 2.1 kg CO₂ per ream",
-                        "Daily Avg: ${(p.paperReavesMonth / 30.0) * 2.1} kg CO₂"
+                        "Daily Avg: ${(p.paperReamsMonth / 30.0) * 2.1} kg CO₂"
+
                     )
                 )
             }

@@ -96,11 +96,15 @@ fun HistoryScreen(
 
 
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
+    if (state.isInstitution) {
+        InstitutionHistoryScreen(state = state)
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+
         item {
             Text("Your Carbon Calendar", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
@@ -343,46 +347,48 @@ fun HistoryScreen(
         }
 
 
-        if (!state.isInstitution) {
-            items(filteredTransport) { segment ->
-                HistoryItem(
-                    title = "Transport: ${segment.transportMode}",
-                    value = "${String.format(Locale.getDefault(), "%.2f", segment.co2Kg)} kg",
-                    date = dateFormat.format(Date(segment.date)),
-                    subtitle = "${String.format(Locale.getDefault(), "%.1f", segment.estimatedKm)} km traveled"
-                )
-            }
-
-            items(filteredFood) { log ->
-                HistoryItem(
-                    title = "Food: ${log.mealType}",
-                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                    date = dateFormat.format(Date(log.date)),
-                    subtitle = log.description
-                )
-            }
-
-            items(filteredDigital) { log ->
-                HistoryItem(
-                    title = "Digital Activity",
-                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                    date = dateFormat.format(Date(log.date)),
-                    subtitle = "${log.screenTimeMinutes} minutes screen time"
-                )
-            }
-
-            items(filteredEnergy) { log ->
-                HistoryItem(
-                    title = "Energy: ${log.energyType}",
-                    value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
-                    date = dateFormat.format(Date(log.date)),
-                    subtitle = log.value.toString()
-                )
-            }
+        items(filteredTransport) { segment ->
+            HistoryItem(
+                title = "Transport: ${segment.transportMode}",
+                value = "${String.format(Locale.getDefault(), "%.2f", segment.co2Kg)} kg",
+                date = dateFormat.format(Date(segment.date)),
+                subtitle = "${String.format(Locale.getDefault(), "%.1f", segment.estimatedKm)} km traveled"
+            )
         }
 
+        items(filteredFood) { log ->
+            HistoryItem(
+                title = "Food: ${log.mealType}",
+                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                date = dateFormat.format(Date(log.date)),
+                subtitle = log.description
+            )
+        }
+
+        items(filteredDigital) { log ->
+            HistoryItem(
+                title = "Digital Activity",
+                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                date = dateFormat.format(Date(log.date)),
+                subtitle = "${log.screenTimeMinutes} minutes screen time"
+            )
+        }
+
+        items(filteredEnergy) { log ->
+            HistoryItem(
+                title = "Energy: ${log.energyType}",
+                value = "${String.format(Locale.getDefault(), "%.2f", log.co2Kg)} kg",
+                date = dateFormat.format(Date(log.date)),
+                subtitle = log.value.toString()
+            )
+        }
     }
 }
+}
+
+
+
+
 
 data class PieSlice(val label: String, val value: Double, val color: Color)
 data class BarData(val label: String, val value: Double)
@@ -392,18 +398,41 @@ fun HistoryItem(title: String, value: String, date: String, subtitle: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                alpha = 0.5f
+            )
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    date,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
+
+

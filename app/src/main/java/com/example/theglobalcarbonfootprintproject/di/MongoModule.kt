@@ -16,8 +16,10 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object MongoModule {
     
-    // Point to the live Render backend
-    private const val BASE_URL = "https://carbon-footprint-app-backend.onrender.com/"
+    // Point to the local backend for testing phase
+    private const val BASE_URL = "http://192.168.1.107:3000/"
+
+
 
 
     @Provides
@@ -29,7 +31,13 @@ object MongoModule {
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)
+            .connectTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .callTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
             .build()
+
+
     }
 
     @Provides

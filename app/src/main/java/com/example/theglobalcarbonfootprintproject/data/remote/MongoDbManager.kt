@@ -41,7 +41,14 @@ class MongoDbManager @Inject constructor(
     suspend fun saveInstitutionProfile(profile: InstitutionProfile) {
         withContext(Dispatchers.IO) {
             try {
-                val response = apiService.saveInstitutionProfile(profile)
+                val prefs = context.getSharedPreferences("carbon_prefs", Context.MODE_PRIVATE)
+                val userId = prefs.getString("user_id", null)
+                if (userId == null) {
+                    Log.e("MongoDbManager", "Cannot save institution: No userId found")
+                    return@withContext
+                }
+
+                val response = apiService.saveInstitutionProfile(userId, profile)
                 if (response.success) {
                     Log.d("MongoDbManager", "Successfully saved InstitutionProfile to Express Backend.")
                 } else {
@@ -59,14 +66,55 @@ class MongoDbManager @Inject constructor(
                 val userId = prefs.getString("user_id", null)
                 if (userId == null) return@withContext
 
-                val response = apiService.syncLog(userId, log)
-                if (response.success) {
-                    Log.d("MongoDbManager", "Successfully synced CarbonLog to Backend.")
-                }
+                val userType = prefs.getString("user_type", "INDIVIDUAL") ?: "INDIVIDUAL"
+                val score = prefs.getInt("current_carbon_score", 75)
+                val deviceId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "unknown"
+
+                val request = DailyLogRequest(
+                    deviceId = deviceId,
+                    date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(log.date)),
+                    userType = userType,
+                    transportKg = log.transportKg,
+                    energyKg = log.electricityKg,
+                    foodKg = log.foodKg,
+                    digitalKg = log.digitalKg,
+                    wasteKg = log.wasteKg,
+                    eventKg = log.eventKg,
+                    totalKg = log.totalKg,
+                    score = score,
+                    kmWalked = 0.0,
+                    stepsCount = prefs.getInt("steps_today", 0),
+                    energyLogged = true,
+                    foodLogged = true,
+                    transportAutoDetected = true,
+                    electricityMethod = "Manual",
+                    seasonLabel = "Current"
+                )
+
+                val response = apiService.syncLog(userId, request)
+
             } catch (e: Exception) {
                 Log.e("MongoDbManager", "Error syncing log", e)
             }
         }
     }
+
+    suspend fun getLeaderboard(state: String?, userType: String): List<com.example.theglobalcarbonfootprintproject.data.remote.LeaderboardEntry> {
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.getLeaderboard(state, userType)
+                if (response.success && response.leaderboard != null) {
+                    response.leaderboard
+                } else {
+                    emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e("MongoDbManager", "Error fetching leaderboard", e)
+                emptyList()
+            }
+        }
+    }
 }
+
 

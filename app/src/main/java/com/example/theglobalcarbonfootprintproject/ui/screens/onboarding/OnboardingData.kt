@@ -66,8 +66,11 @@ data class OnboardingData(
     val canteenFuel: CanteenFuel = CanteenFuel.LPG,
     val lpgCylindersMonth: Int = 10,
     val dailyMealsServed: Int = 500,
-    val paperReavesMonth: Int = 50,
+    val paperReamsMonth: Int = 50,
+
     val annualEvents: List<AnnualEvent> = emptyList(),
+    val departments: List<DepartmentBreakdown> = emptyList(),
+
 
     // Permissions result (saved after permissions screen)
     val activityPermissionGranted: Boolean = false,
@@ -94,5 +97,13 @@ enum class CanteenFuel { LPG, PNG, ELECTRIC, MIXED }
 data class AnnualEvent(
     val name: String,
     val attendance: Int,
-    val durationDays: Int
+    val durationDays: Int,
+    val month: Int = 1 // 1-12
 )
+
+data class DepartmentBreakdown(
+    val name: String,
+    val studentCount: Int,
+    val energyWeight: Double = 1.0 // Relative energy weight (e.g., Engineering Labs use more than Admin)
+)
+
