@@ -146,7 +146,71 @@ Getting the **Google Activity Recognition API** to work reliably across differen
 Android's `UsageStatsManager` provides raw data that includes system background processes. To prevent "over-charging" users for carbon, we developed a logic layer to bifurcate **Active App Usage** (Foreground) from **Total Device Usage**, providing a fair and accurate digital carbon footprint.
 
 ---
-**Developed by:** Vicky Dsilva, Viraj Darekar, Leeon Crasto, Dan Pegado.
-**Institutional Partner:** Fr. Conceicao Rodrigues College of Engineering (Bandra, Mumbai)
+
+## 📂 Project Structure
+
+The project is divided into a **Multi-Module Android App** (Frontend) and a **Node.js/Express Backend**.
+
+### **1. Android App Architecture**
+*   **`com.example.theglobalcarbonfootprintproject.data`**
+    *   **`local/`**: Contains `CarbonDatabase.kt` (Room builder) and `CarbonDao.kt`. Defines entities like `UserProfile`, `CarbonLog`, and `InstitutionProfile`.
+    *   **`remote/`**: The cloud interface. `MongoApiService.kt` defines Retrofit endpoints, and `MongoDbManager.kt` handles the logic for syncing local data to MongoDB.
+    *   **`repository/`**: `CarbonRepository.kt` acts as the **Single Source of Truth**, coordinating between Room and MongoDB.
+*   **`com.example.theglobalcarbonfootprintproject.ui`**
+    *   **`screens/`**: Organized by feature (e.g., `onboarding/`, `dashboard/`, `ai/`, `community/`). Each contains its own `Screen.kt` and `ViewModel.kt`.
+    *   **`components/`**: Reusable UI elements like `CarbonGauge`, `NavigationRail`, and `StatCard`.
+*   **`com.example.theglobalcarbonfootprintproject.utils`**
+    *   `CarbonEngine.kt`: The "Brain" for individual calculations.
+    *   `InstitutionCarbonEngine.kt`: Specialized logic for campus-scale footprints.
+    *   `DigitalFootprintManager.kt`: Interfaces with Android's `UsageStatsManager`.
+
+### **2. Backend Architecture (Node.js)**
+*   `index.js`: The central hub. Handles JWT/Auth, MongoDB CRUD operations, and the AI Proxy.
+*   `.env`: Secure storage for MongoDB URIs and Gemini API keys.
+*   `debugUsers.js` / `seedLeaderboard.js`: Maintenance scripts for database integrity.
+
+---
+
+## 🚀 Full Project Flow & Logic Depth
+
+### **1. User Onboarding & Secure Auth**
+*   **Action**: User clicks "Finish Onboarding" in `OnboardingScreen`.
+*   **Internal Flow**: 
+    1.  `OnboardingViewModel.completeOnboarding()` is triggered. It collects data from the multi-step UI.
+    2.  The data is passed to `CarbonRepository.saveUserProfile()`, which persists it locally in **Room SQLite**.
+    3.  Immediately, `MongoDbManager.syncUserProfile()` is called via a Coroutine.
+    4.  **Backend Logic**: The backend `index.js` receives the profile. If it's a new signup, it uses `bcrypt.hash()` to secure the password before inserting the record into the **MongoDB `users` collection**.
+    5.  **UI Feedback**: Animations in `OnboardingScreen` (powered by `Lottie` or `Compose Animate`) trigger once the `onboardingComplete` flag in `SharedPreferences` is set to `true`.
+
+### **2. The Daily Logging Lifecycle**
+*   **Action**: User logs a transport trip (e.g., "10km by Petrol Car").
+*   **Internal Flow**:
+    1.  `LogViewModel.addTransportLog()` calls `CarbonEngine.calculateTransport()` located in `CarbonEngine.kt`.
+    2.  The resulting `CarbonLog` object is saved to the local database via `CarbonDao.insertLog()`.
+    3.  The **Observer Pattern** in `DashboardViewModel` detects the database change via a `Flow` and updates the `CarbonGauge` in real-time.
+    4.  **Background Sync**: Every 6 hours (or upon manual refresh), `CarbonRepository.syncLogsToCloud()` pushes these records to the backend's `/api/sync-logs` endpoint, where they are "upserted" into MongoDB to prevent duplicates.
+
+### **3. Institutional AI Consulting (Gemini Strategy)**
+*   **Action**: An institutional admin asks: "How can I reduce campus energy costs?"
+*   **Internal Flow**:
+    1.  `AiAssistantViewModel` detects `user_type == "INSTITUTION"` from `SharedPreferences`.
+    2.  It queries `carbonDao.getInstitutionProfile()` to get campus-specific data (Solar capacity, student count).
+    3.  It constructs a **Rich Context String** (Persona) and sends it to the backend via `MongoApiService.chatWithAi()`.
+    4.  **Backend Fallback Logic**: 
+        - The backend `index.js` tries `gemini-2.5-flash` for speed.
+        - If it hits a `503` (busy) or `429` (quota), it automatically falls back to `gemini-2.0-flash`, then `gemini-2.5-pro`, and finally `gemini-2.0-pro`.
+    5.  **Output Limiting**: The backend applies a `maxOutputTokens: 500` limit to ensure the response is concise and fits perfectly in the chat bubble.
+
+### **4. Global & Local Leaderboards**
+*   **Action**: User opens the "Community" tab.
+*   **Internal Flow**:
+    1.  `LeaderboardViewModel` is initialized. It fetches the user's current `state` (e.g., Maharashtra) from Room.
+    2.  It calls `repository.getLeaderboard(state, category)`.
+    3.  **Backend Aggregation**: The backend queries the **`scores`** collection for individuals or **`institution_scores`** for organizations. 
+    4.  It returns a sorted JSON list which `LeaderboardScreen.kt` renders using a `LazyColumn` with custom `FilterChips` to toggle between types.
+
+---
+
+
 
 
