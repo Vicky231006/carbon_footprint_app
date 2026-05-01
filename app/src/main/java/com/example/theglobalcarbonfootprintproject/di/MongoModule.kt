@@ -16,8 +16,9 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object MongoModule {
     
-    // Use the computer's actual Wi-Fi IP address so the physical phone can reach it
-    private const val BASE_URL = "http://192.168.1.106:3000/"
+    // Point to the live Render backend
+    private const val BASE_URL = "https://carbon-footprint-app-backend.onrender.com/"
+
 
     @Provides
     @Singleton

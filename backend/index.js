@@ -3,8 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
+
 const port = process.env.PORT || 3000;
 
 app.use(cors());
@@ -219,7 +221,52 @@ app.get('/api/logs/:userId', async (req, res) => {
   }
 });
 
+// AI ASSISTANT ENDPOINT
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const { message, context } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      return res.status(500).json({ success: false, error: "AI API Key missing on server" });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      systemInstruction: context
+    });
+
+    const result = await model.generateContent(message);
+    const response = await result.response;
+    const text = response.text();
+
+    res.status(200).json({ success: true, reply: text });
+  } catch (e) {
+    console.error("   AI Error:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+
+// LEGACY COMPATIBILITY ENDPOINTS (For older app versions)
+app.post('/daily-log', async (req, res) => {
+  console.log(`[LEGACY] Received daily-log from device: ${req.headers.deviceid}`);
+  res.status(200).json({ success: true, message: "Legacy log received and acknowledged" });
+});
+
+app.post('/food-log', async (req, res) => {
+  console.log(`[LEGACY] Received food-log from device: ${req.headers.deviceid}`);
+  res.status(200).json({ success: true });
+});
+
+app.post('/transport-segment', async (req, res) => {
+  console.log(`[LEGACY] Received transport-segment from device: ${req.headers.deviceid}`);
+  res.status(200).json({ success: true });
+});
+
 app.listen(port, '0.0.0.0', () => {
+
   console.log(`\n=========================================`);
   console.log(`  CARBON SERVER ${SERVER_VERSION} RUNNING`);
   console.log(`  PORT: ${port}`);

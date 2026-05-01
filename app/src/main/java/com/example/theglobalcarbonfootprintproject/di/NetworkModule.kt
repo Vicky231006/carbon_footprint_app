@@ -35,7 +35,8 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:5000/api/") // 10.0.2.2 is localhost for Android Emulator
+            .baseUrl("https://carbon-footprint-app-backend.onrender.com/") 
+
             .addConverterFactory(GsonConverterFactory.create())
             .client(okHttpClient)
             .build()

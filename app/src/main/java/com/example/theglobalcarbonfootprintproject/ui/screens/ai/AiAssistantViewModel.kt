@@ -31,13 +31,14 @@ data class ChatMessage(
 @HiltViewModel
 class AiAssistantViewModel @Inject constructor(
     private val carbonDao: CarbonDao,
-    private val sharedPreferences: android.content.SharedPreferences
+    private val sharedPreferences: android.content.SharedPreferences,
+    private val apiService: com.example.theglobalcarbonfootprintproject.data.remote.MongoApiService
 ) : ViewModel() {
+
 
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState = _uiState.asStateFlow()
 
-    private var generativeModel: GenerativeModel? = null
     private var chatContext = ""
 
     init {
@@ -72,7 +73,7 @@ class AiAssistantViewModel @Inject constructor(
                 tips.add("Carry a reusable water bottle.")
             }
 
-            // Generate 4 generic suggestion chips (not targeted per user feedback)
+            // Generate 4 generic suggestion chips
             val suggestions = buildSuggestions(userProfile)
 
             val isInst = sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION"
@@ -91,10 +92,10 @@ class AiAssistantViewModel @Inject constructor(
                 messages = listOf(ChatMessage(welcomeMessage, false)),
                 isLoading = false,
                 suggestions = suggestions,
-                geminiConnected = false
+                geminiConnected = true // We assume online as we use backend
             )
 
-            // Verify Gemini API connection
+            // Define Persona Context
             chatContext = if (isInst) {
                 "You are a specialized Institutional Carbon Consultant for an Indian campus/organization. " +
                 "Provide strategic, data-driven advice on reducing the carbon footprint of large facilities. " +
@@ -106,33 +107,6 @@ class AiAssistantViewModel @Inject constructor(
                 "Focus on Indian context: public transport like metros and buses, seasonal electricity with ACs, " +
                 "vegetarian vs non-vegetarian diets, and digital footprint from streaming. " +
                 "Keep responses concise (2-3 paragraphs max)."
-            }
-
-
-            val apiKey = BuildConfig.GEMINI_API_KEY
-            if (apiKey.isNotBlank()) {
-                try {
-                    generativeModel = GenerativeModel(
-                        modelName = "gemini-1.5-flash",
-                        apiKey = apiKey,
-                        systemInstruction = content { text(chatContext) }
-                    )
-
-
-
-                    // Verify connection with a quick test
-                    val testResponse = generativeModel!!.generateContent("Say 'connected' in one word")
-                    if (testResponse.text != null) {
-                        _uiState.value = _uiState.value.copy(geminiConnected = true)
-                        Log.d("AiAssistant", "Gemini API connected successfully")
-                    }
-                } catch (e: Exception) {
-                    Log.e("AiAssistant", "Gemini API connection failed: ${e.message}")
-                    generativeModel = null
-                    _uiState.value = _uiState.value.copy(geminiConnected = false)
-                }
-            } else {
-                Log.w("AiAssistant", "GEMINI_API_KEY is blank, running in offline mode")
             }
         }
     }
@@ -156,10 +130,10 @@ class AiAssistantViewModel @Inject constructor(
                 else -> "How can I make my daily commute more eco-friendly?"
             })
 
-            // 2. General eco tip (kept generic per user feedback)
+            // 2. General eco tip
             suggestions.add("What are the top 5 easy ways to reduce my carbon footprint at home?")
 
-            // 3. Seasonal/general energy tip (generic, not targeted)
+            // 3. Seasonal/general energy tip
             suggestions.add("How does seasonal weather affect household energy consumption in India?")
 
             // 4. Lifestyle/awareness
@@ -175,46 +149,36 @@ class AiAssistantViewModel @Inject constructor(
 
         val currentMessages = _uiState.value.messages.toMutableList()
         currentMessages.add(ChatMessage(text, true))
-        // Hide suggestions after first interaction
         _uiState.value = _uiState.value.copy(messages = currentMessages, isLoading = true, suggestions = emptyList())
 
         viewModelScope.launch {
-            if (generativeModel != null) {
-                try {
-                    val response = generativeModel!!.generateContent(text)
-                    val aiResponse = response.text ?: "I'm sorry, I couldn't process that."
+            try {
+                val response = apiService.chatWithAi(
+                    com.example.theglobalcarbonfootprintproject.data.remote.ChatRequest(
+                        message = text,
+                        context = chatContext
+                    )
+                )
 
+                if (response.success && response.reply != null) {
                     val updatedMessages = _uiState.value.messages.toMutableList()
-                    updatedMessages.add(ChatMessage(aiResponse, false))
-                    _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
-                } catch (e: Exception) {
-                    val errorMsg = e.message ?: "Unknown error"
-                    Log.e("AiAssistant", "Gemini error: $errorMsg")
-                    
-                    if (errorMsg.contains("429") || errorMsg.contains("Quota")) {
-                        Log.w("AiAssistant", "Rate limit hit! Switching to offline mode temporarily.")
-                    }
-
-                    val hardcoded = FallbackAdviceEngine.getHardcodedAnswer(text)
-
-                    val userType = if (sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION") UserType.INSTITUTION else UserType.INDIVIDUAL
-                    val fallbackTip = hardcoded ?: FallbackAdviceEngine.getAdvice(userType)
-                    
-                    val updatedMessages = _uiState.value.messages.toMutableList()
-                    updatedMessages.add(ChatMessage("[Offline] $fallbackTip", false))
-                    _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
+                    updatedMessages.add(ChatMessage(response.reply, false))
+                    _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false, geminiConnected = true)
+                } else {
+                    throw Exception(response.error ?: "Failed to get response from server")
                 }
-            } else {
-                // Offline fallback
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: "Unknown error"
+                Log.e("AiAssistant", "Backend AI error: $errorMsg")
+
                 val hardcoded = FallbackAdviceEngine.getHardcodedAnswer(text)
                 val userType = if (sharedPreferences.getString("user_type", "INDIVIDUAL") == "INSTITUTION") UserType.INSTITUTION else UserType.INDIVIDUAL
                 val fallbackTip = hardcoded ?: FallbackAdviceEngine.getAdvice(userType)
-                
+
                 val updatedMessages = _uiState.value.messages.toMutableList()
-                updatedMessages.add(ChatMessage("[Offline] $fallbackTip", false))
-                _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false)
+                updatedMessages.add(ChatMessage("[Service Syncing] $fallbackTip", false))
+                _uiState.value = _uiState.value.copy(messages = updatedMessages, isLoading = false, geminiConnected = false)
             }
         }
-
     }
 }

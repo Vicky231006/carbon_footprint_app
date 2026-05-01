@@ -48,7 +48,14 @@ interface MongoApiService {
 
     @GET("api/logs/{userId}")
     suspend fun getLogs(@Path("userId") userId: String): LogHistoryResponse
+    
+    @POST("api/ai/chat")
+    suspend fun chatWithAi(@Body request: ChatRequest): ChatResponse
 }
+
+data class ChatRequest(val message: String, val context: String)
+data class ChatResponse(val success: Boolean, val reply: String? = null, val error: String? = null)
+
 
 data class LogHistoryResponse(
     val success: Boolean,
