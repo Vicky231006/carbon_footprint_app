@@ -18,6 +18,3 @@ backend/node_modules
 backend/.env
 .env
 GlobalCarbonFootprint_MiniProject_Report_v2.pdf
-backend\seedInstitutions.js
-backend\seedLeaderboard.js
-backend\seedScores.js
